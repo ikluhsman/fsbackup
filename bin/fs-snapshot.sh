@@ -16,7 +16,7 @@ set -euo pipefail
 BAK_ROOT="/bak"
 SNAP_ROOT="${BAK_ROOT}/snapshots"
 TMP_ROOT="${BAK_ROOT}/tmp/in-progress"
-LOG_FILE="${BAK_ROOT}/logs/backup.log"
+LOG_FILE="/var/logs/fsbackup/fsbackup.log"
 
 METRICS_DIR="/var/lib/node_exporter/textfile_collector"
 

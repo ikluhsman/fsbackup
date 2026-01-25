@@ -1,23 +1,173 @@
+# =============================================================================
+# fsbackup targets
+# =============================================================================
+
 class1:
-  - id: files.technicom
+  - id: technicom.files
     host: fs
     source: /shr/technicom
-    snapshot: daily
 
-  - id: files.shared
+  - id: shared.files
     host: fs
     source: /shr/shared
-    snapshot: daily
+
+  - id: mosquitto.data
+    host: denhpsvr1
+    source: /docker/volumes/mosquitto_data
+
+  - id: ntfy.data
+    host: denhpsvr1
+    source: /docker/volumes/ntfy_data
+
+  - id: prometheus.data
+    host: denhpsvr1
+    source: /docker/volumes/prometheus_data
+
+  - id: registry.data
+    host: denhpsvr1
+    source: /docker/volumes/registry_data
+
+  - id: zabbix.server.data
+    host: denhpsvr1
+    source: /docker/volumes/zabbix_server_data
+
+  - id: docmost.data
+    host: denhpsvr2
+    source: /docker/volumes/docmost_data
+
+  - id: grafana.data
+    host: denhpsvr2
+    source: /docker/volumes/grafana_data
+
+  - id: ipam.data
+    host: denhpsvr2
+    source: /docker/volumes/ipam_data
+
+  - id: joplin.data
+    host: denhpsvr2
+    source: /docker/volumes/joplin_data
+
+  - id: lube-logger.data
+    host: denhpsvr2
+    source: /docker/volumes/lube-logger_data
+
+  - id: mealie.data
+    host: denhpsvr2
+    source: /docker/volumes/mealie_data
+
+  - id: owntracks.data
+    host: denhpsvr2
+    source: /docker/volumes/owntracks_data
+
+  - id: paperlessngx.data
+    host: fs
+    source: /docker/volumes/paperlessngx_data
+
+  - id: paperlessngx.consume
+    host: fs
+    source: /shr/paperless
+
+  - id: apache.git.repos
+    host: fs
+    source: /var/www/src
+
+  - id: plex.config
+    host: fs
+    source: /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
+
+  - id: headscale.data
+    host: hs
+    source: /var/lib/headscale
+
+  - id: bind.zones
+    host: ns1
+    source: /etc/bind/zones
+
+  - id: bind.keys
+    host: ns1
+    source: /etc/bind/keys
+
+  - id: bind.cache
+    host: ns1
+    source: /var/cache/bind
+
+  - id: nginx.letsencrypt
+    host: rp
+    source: /etc/letsencrypt
+
 
 class2:
-  - id: cron.config
+  - id: homeassistant.backups
     host: fs
-    source: /etc/cron.d
-    snapshot: weekly
+    source: /shr/backups/homeassistant
+
+  - id: headscale.config
+    host: hs
+    source: /etc/headscale
+
+  - id: bind.named.conf
+    host: ns1
+    source: /etc/bind
+
+  - id: webmin.config
+    host: ns1
+    source: /etc/webmin
+
+  - id: webmin.state
+    host: ns1
+    source: /var/webmin
+
+  - id: nginx.config
+    host: rp
+    source: /etc/nginx
 
   - id: docker.stacks.fs
     host: fs
     source: /docker/stacks
-    snapshot: weekly
 
-   
+  - id: docker.stacks.denhpsvr1
+    host: denhpsvr1
+    source: /docker/stacks
+
+  - id: docker.stacks.denhpsvr2
+    host: denhpsvr2
+    source: /docker/stacks
+
+  - id: weewx.html
+    host: weewx
+    source: /var/www/html
+
+  - id: weewx.config
+    host: weewx
+    source: /etc/weewx
+
+  - id: mdns.avahi
+    host: mdns
+    source: /etc/avahi/avahi_daemon.conf
+
+  - id: apache.config
+    host: fs
+    source: /etc/apache2
+
+
+class3:
+  - id: system.hostname
+    host: all
+    source: /etc/hostname
+
+  - id: system.hosts
+    host: all
+    source: /etc/hosts
+
+  - id: system.netplan.fs
+    host: fs
+    source: /etc/netplan
+
+  - id: system.netplan.denhpsvr1
+    host: denhpsvr1
+    source: /etc/netplan
+
+  - id: system.netplan.denhpsvr2
+    host: denhpsvr2
+    source: /etc/netplan
+

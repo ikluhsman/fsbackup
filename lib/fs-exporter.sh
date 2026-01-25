@@ -208,4 +208,119 @@ fs_backup_error_code_from_context() {
   esac
 }
 
+emit_promote_metrics() {
+  local METRICS_FILE=""
+  local FROM=""
+  local TO=""
+  local CLASS=""
+  local STATUS=""
+  local ERROR_CODE=""
+  local START_TS=""
+  local END_TS=""
+  local DURATION=""
+  local TARGETS=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --metrics-file) METRICS_FILE="$2"; shift 2 ;;
+      --from) FROM="$2"; shift 2 ;;
+      --to) TO="$2"; shift 2 ;;
+      --class) CLASS="$2"; shift 2 ;;
+      --status) STATUS="$2"; shift 2 ;;
+      --error-code) ERROR_CODE="$2"; shift 2 ;;
+      --start-ts) START_TS="$2"; shift 2 ;;
+      --end-ts) END_TS="$2"; shift 2 ;;
+      --duration) DURATION="$2"; shift 2 ;;
+      --targets) TARGETS="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  local TMP_FILE
+  TMP_FILE="$(mktemp "${METRICS_FILE}.tmp.XXXXXX")"
+
+  cat >"$TMP_FILE" <<EOF
+# HELP fs_backup_promote_status Promotion job status (0=success,1=failure)
+# TYPE fs_backup_promote_status gauge
+fs_backup_promote_status{from="${FROM}",to="${TO}",class="${CLASS}"} ${STATUS}
+
+# HELP fs_backup_promote_error_code Promotion error code
+# TYPE fs_backup_promote_error_code gauge
+fs_backup_promote_error_code{from="${FROM}",to="${TO}",class="${CLASS}"} ${ERROR_CODE}
+
+# HELP fs_backup_promote_duration_seconds Promotion duration in seconds
+# TYPE fs_backup_promote_duration_seconds gauge
+fs_backup_promote_duration_seconds{from="${FROM}",to="${TO}",class="${CLASS}"} ${DURATION}
+
+# HELP fs_backup_promote_targets Total targets promoted
+# TYPE fs_backup_promote_targets gauge
+fs_backup_promote_targets{from="${FROM}",to="${TO}",class="${CLASS}"} ${TARGETS}
+
+# HELP fs_backup_promote_start_timestamp Promotion start timestamp (epoch)
+# TYPE fs_backup_promote_start_timestamp gauge
+fs_backup_promote_start_timestamp{from="${FROM}",to="${TO}",class="${CLASS}"} ${START_TS}
+
+# HELP fs_backup_promote_end_timestamp Promotion end timestamp (epoch)
+# TYPE fs_backup_promote_end_timestamp gauge
+fs_backup_promote_end_timestamp{from="${FROM}",to="${TO}",class="${CLASS}"} ${END_TS}
+EOF
+
+  mv "$TMP_FILE" "$METRICS_FILE"
+}
+
+emit_prune_metrics() {
+  local METRICS_FILE=""
+  local TIER=""
+  local STATUS=""
+  local ERROR_CODE=""
+  local START_TS=""
+  local END_TS=""
+  local DURATION=""
+  local PRUNED=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --metrics-file) METRICS_FILE="$2"; shift 2 ;;
+      --tier) TIER="$2"; shift 2 ;;
+      --status) STATUS="$2"; shift 2 ;;
+      --error-code) ERROR_CODE="$2"; shift 2 ;;
+      --start-ts) START_TS="$2"; shift 2 ;;
+      --end-ts) END_TS="$2"; shift 2 ;;
+      --duration) DURATION="$2"; shift 2 ;;
+      --pruned) PRUNED="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  local TMP
+  TMP="$(mktemp "${METRICS_FILE}.tmp.XXXXXX")"
+
+  cat >"$TMP" <<EOF
+# HELP fs_backup_prune_status Prune job status (0=success,1=failure)
+# TYPE fs_backup_prune_status gauge
+fs_backup_prune_status{tier="${TIER}"} ${STATUS}
+
+# HELP fs_backup_prune_error_code Prune error code
+# TYPE fs_backup_prune_error_code gauge
+fs_backup_prune_error_code{tier="${TIER}"} ${ERROR_CODE}
+
+# HELP fs_backup_prune_duration_seconds Prune duration in seconds
+# TYPE fs_backup_prune_duration_seconds gauge
+fs_backup_prune_duration_seconds{tier="${TIER}"} ${DURATION}
+
+# HELP fs_backup_prune_pruned_total Total snapshots pruned
+# TYPE fs_backup_prune_pruned_total counter
+fs_backup_prune_pruned_total{tier="${TIER}"} ${PRUNED}
+
+# HELP fs_backup_prune_start_timestamp Prune start timestamp
+# TYPE fs_backup_prune_start_timestamp gauge
+fs_backup_prune_start_timestamp{tier="${TIER}"} ${START_TS}
+
+# HELP fs_backup_prune_end_timestamp Prune end timestamp
+# TYPE fs_backup_prune_end_timestamp gauge
+fs_backup_prune_end_timestamp{tier="${TIER}"} ${END_TS}
+EOF
+
+  mv "$TMP" "$METRICS_FILE"
+}
 
