@@ -1,0 +1,6 @@
+Host hs
+    User backup
+    IdentityFile /var/lib/fsbackup/.ssh/id_ed25519_backup
+    BatchMode yes
+    StrictHostKeyChecking yes
+

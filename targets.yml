@@ -1,0 +1,23 @@
+class1:
+  - id: files.technicom
+    host: fs
+    source: /shr/technicom
+    snapshot: daily
+
+  - id: files.shared
+    host: fs
+    source: /shr/shared
+    snapshot: daily
+
+class2:
+  - id: cron.config
+    host: fs
+    source: /etc/cron.d
+    snapshot: weekly
+
+  - id: docker.stacks.fs
+    host: fs
+    source: /docker/stacks
+    snapshot: weekly
+
+   
