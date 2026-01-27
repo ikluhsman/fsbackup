@@ -10,6 +10,7 @@ REPLACE_EXISTING=0
 FAILED=0
 SUCCEEDED=0
 FAILED_TARGETS=()
+PRECHECK=1
 
 SNAPSHOT_TYPE="${1:-}"
 shift || true
@@ -20,11 +21,26 @@ while [[ $# -gt 0 ]]; do
     --class) CLASS="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --replace-existing) REPLACE_EXISTING=1; shift ;;
+    --no-preflight) PRECHECK=0; shift;;
     *) echo "Unknown argument: $1"; exit 2 ;;
   esac
 done
 
 [[ -n "$SNAPSHOT_TYPE" && -n "$CLASS" ]] || { echo "Missing args"; exit 2; }
+
+PREFLIGHT_SCRIPT="/usr/local/sbin/fs-preflight.sh"
+
+if [[ "$PRECHECK" -eq 1 ]]; then
+  echo
+  echo "Running preflight checks..."
+  if ! "$PREFLIGHT_SCRIPT" "$CLASS"; then
+    echo
+    echo "Preflight failed — aborting snapshot run."
+    exit 2
+  fi
+  echo "Preflight passed."
+  echo
+fi
 
 command -v yq >/dev/null || { echo "yq missing"; exit 2; }
 command -v jq >/dev/null || { echo "jq missing"; exit 2; }
