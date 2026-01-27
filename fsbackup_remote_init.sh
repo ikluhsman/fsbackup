@@ -2,88 +2,123 @@
 set -euo pipefail
 
 # =============================================================================
-# fsbackup-remote-init.sh
+# fsbackup_remote_init.sh
 #
-# Prepares a remote host for fsbackup rsync access.
+# Prepares a remote host for fsbackup rsync pulls.
 # Safe and idempotent.
 #
-# Run as root ON THE REMOTE HOST.
+# Fixes:
+#  - nologin shell breaking rsync
+#  - SSH key installation
+#  - node_exporter textfile permissions
+#  - noisy shells corrupting rsync protocol
+#
 # =============================================================================
 
 BACKUP_USER="backup"
 BACKUP_GROUP="backup"
+BACKUP_HOME="/home/backup"
+BACKUP_SHELL="/bin/bash"
+
 NODEEXP_GROUP="nodeexp_txt"
 NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
 
-# --- embedded key placeholder ---
-# REPLACE THIS WITH REAL KEY
-FSBACKUP_PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJwT7RbHgoeGRTQfF/bbdtJJ6+WBfteTH5jYTzZUUcc"
+SSH_DIR="${BACKUP_HOME}/.ssh"
+AUTHORIZED_KEYS="${SSH_DIR}/authorized_keys"
 
-echo "== fsbackup remote init starting =="
+PROM_FILE="${NODEEXP_DIR}/fsbackup_remote_init.prom"
 
-# -----------------------------
-# User & group sanity
-# -----------------------------
-getent passwd "$BACKUP_USER" >/dev/null || {
+# ---------------------------------------------------------------------
+# FAKE KEY — replace with real fsbackup public key
+# ---------------------------------------------------------------------
+FSBACKUP_PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFAKEKEYREPLACEME fsbackup@fs"
+
+# ---------------------------------------------------------------------
+# Sanity
+# ---------------------------------------------------------------------
+[[ $EUID -eq 0 ]] || { echo "Must run as root"; exit 1; }
+
+# ---------------------------------------------------------------------
+# Ensure groups
+# ---------------------------------------------------------------------
+getent group "$BACKUP_GROUP" >/dev/null || groupadd "$BACKUP_GROUP"
+getent group "$NODEEXP_GROUP" >/dev/null || groupadd "$NODEEXP_GROUP"
+
+# ---------------------------------------------------------------------
+# Ensure backup user
+# ---------------------------------------------------------------------
+if ! id "$BACKUP_USER" >/dev/null 2>&1; then
   useradd \
-    --system \
-    --home /var/lib/fsbackup \
+    --home "$BACKUP_HOME" \
     --create-home \
-    --shell /usr/sbin/nologin \
+    --shell "$BACKUP_SHELL" \
+    --gid "$BACKUP_GROUP" \
     "$BACKUP_USER"
-}
+fi
 
-usermod -s /usr/sbin/nologin "$BACKUP_USER"
+# Force correct shell (CRITICAL)
+usermod -s "$BACKUP_SHELL" "$BACKUP_USER"
 
-# -----------------------------
+# ---------------------------------------------------------------------
 # SSH setup
-# -----------------------------
-SSH_DIR="/var/lib/fsbackup/.ssh"
-AUTH_KEYS="$SSH_DIR/authorized_keys"
-
+# ---------------------------------------------------------------------
 mkdir -p "$SSH_DIR"
 chmod 700 "$SSH_DIR"
 chown "$BACKUP_USER:$BACKUP_GROUP" "$SSH_DIR"
 
-grep -qxF "$FSBACKUP_PUBKEY" "$AUTH_KEYS" 2>/dev/null || {
-  echo "$FSBACKUP_PUBKEY" >>"$AUTH_KEYS"
-}
+touch "$AUTHORIZED_KEYS"
+chmod 600 "$AUTHORIZED_KEYS"
+chown "$BACKUP_USER:$BACKUP_GROUP" "$AUTHORIZED_KEYS"
 
-chmod 600 "$AUTH_KEYS"
-chown "$BACKUP_USER:$BACKUP_GROUP" "$AUTH_KEYS"
+if ! grep -q "fsbackup@fs" "$AUTHORIZED_KEYS"; then
+  echo "$FSBACKUP_PUBKEY" >>"$AUTHORIZED_KEYS"
+fi
 
-# -----------------------------
-# node_exporter coexistence
-# -----------------------------
-getent group "$NODEEXP_GROUP" >/dev/null || groupadd "$NODEEXP_GROUP"
+# ---------------------------------------------------------------------
+# Silence non-interactive shells (REQUIRED FOR RSYNC)
+# ---------------------------------------------------------------------
+BASHRC="${BACKUP_HOME}/.bashrc"
 
-usermod -aG "$NODEEXP_GROUP" "$BACKUP_USER"
+if [[ ! -f "$BASHRC" ]] || ! grep -q "non-interactive guard" "$BASHRC"; then
+  cat >>"$BASHRC" <<'EOF'
 
+# --- fsbackup non-interactive guard ---
+# Prevent rsync protocol corruption
+[[ $- != *i* ]] && return
+# --- end fsbackup guard ---
+EOF
+fi
+
+chown "$BACKUP_USER:$BACKUP_GROUP" "$BASHRC"
+chmod 644 "$BASHRC"
+
+# ---------------------------------------------------------------------
+# node_exporter textfile permissions (do NOT break patchcheck)
+# ---------------------------------------------------------------------
 mkdir -p "$NODEEXP_DIR"
 chown root:"$NODEEXP_GROUP" "$NODEEXP_DIR"
 chmod 2775 "$NODEEXP_DIR"
 
-# Verifier (one-liner you asked for)
-sudo -u "$BACKUP_USER" test -w "$NODEEXP_DIR" || {
-  echo "ERROR: backup cannot write to node_exporter textfile dir"
-  exit 1
-}
+usermod -aG "$NODEEXP_GROUP" "$BACKUP_USER"
 
-# -----------------------------
-# Docker traversal (if exists)
-# -----------------------------
-if [[ -d /docker ]]; then
-  setfacl -m u:"$BACKUP_USER":x /docker
-fi
+# ---------------------------------------------------------------------
+# Write Prometheus metric
+# ---------------------------------------------------------------------
+cat >"$PROM_FILE" <<EOF
+# HELP fsbackup_remote_init_status Remote init status (0=success)
+# TYPE fsbackup_remote_init_status gauge
+fsbackup_remote_init_status{host="$(hostname -s)"} 0
+EOF
 
-# -----------------------------
-# BIND (if exists)
-# -----------------------------
-if [[ -d /etc/bind ]]; then
-  setfacl -m u:"$BACKUP_USER":rx /etc/bind
-  [[ -f /etc/bind/rndc.conf ]] && \
-    setfacl -m u:"$BACKUP_USER":r /etc/bind/rndc.conf
-fi
+chown root:"$NODEEXP_GROUP" "$PROM_FILE"
+chmod 664 "$PROM_FILE"
 
-echo "== fsbackup remote init complete =="
+# ---------------------------------------------------------------------
+# Verification (one-liners)
+# ---------------------------------------------------------------------
+su - "$BACKUP_USER" -c 'echo ssh-shell-ok' >/dev/null
+su - "$BACKUP_USER" -c 'touch /var/lib/node_exporter/textfile_collector/.fsbackup_test' >/dev/null
+rm -f /var/lib/node_exporter/textfile_collector/.fsbackup_test
+
+echo "fsbackup remote init complete on $(hostname -s)"
 
