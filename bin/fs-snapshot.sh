@@ -37,6 +37,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+TMP_DIR="/bak/tmp/in-progress/${TARGET_ID}"
+RSYNC_LOG="${TMP_DIR}/rsync.log"
+
+mkdir -p "$TMP_DIR"
+: > "$RSYNC_LOG"
+
+
 [[ -n "$TARGET_ID" && -n "$CLASS" && -n "$HOST" && -n "$SNAPSHOT_TYPE" && -n "$SOURCE_PATH" ]] \
   || { echo "Missing required arguments"; exit 2; }
 
