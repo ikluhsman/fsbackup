@@ -53,7 +53,10 @@ command -v rsync >/dev/null || { echo "rsync not found"; exit 2; }
 command -v ssh-keyscan >/dev/null || { echo "ssh-keyscan not found"; exit 2; }
 
 # Load targets as JSON objects (one per line)
-mapfile -t TARGETS < <(yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE")
+mapfile -t TARGETS < <(
+  yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE" | jq -c .
+)
+
 TOTAL="${#TARGETS[@]}"
 
 echo
