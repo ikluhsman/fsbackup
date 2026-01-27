@@ -1,4 +1,3 @@
-sudo tee /usr/local/sbin/fsbackup-trust-host <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -10,7 +9,4 @@ chown fsbackup:fsbackup /var/lib/fsbackup/.ssh/known_hosts
 chmod 644 /var/lib/fsbackup/.ssh/known_hosts
 
 echo "Trusted host key for $HOST"
-EOF
-
-chmod 755 /usr/local/sbin/fsbackup-trust-host
 
