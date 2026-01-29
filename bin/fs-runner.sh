@@ -1,243 +1,192 @@
 #!/usr/bin/env bash
-set -u
-# IMPORTANT: no `set -e` — runner must survive failures
+set -euo pipefail
 
 # =============================================================================
 # fs-runner.sh
 #
-# Orchestrates snapshot runs for a given snapshot type + class.
-# Executes all targets even if some fail.
+# Executes filesystem snapshots after fs-doctor validation.
+# Must be run as fsbackup user.
 #
-# Exit codes:
-#   0 = all targets succeeded
-#   1 = one or more targets failed
-#   2 = preflight or usage error
+# Usage:
+#   fs-runner.sh <snapshot-type> --class <class> [--dry-run] [--replace-existing]
 #
+# Example:
+#   sudo -u fsbackup fs-runner.sh daily --class class2 --dry-run
 # =============================================================================
 
 CONFIG_FILE="/etc/fsbackup/targets.yml"
-SNAPSHOT_SCRIPT="/usr/local/sbin/fs-snapshot.sh"
-METRICS_DIR="/var/lib/node_exporter/textfile_collector"
+SNAPSHOT_ROOT="/bak/snapshots"
+TMP_ROOT="/bak/tmp/in-progress"
+BACKUP_SSH_USER="backup"
+LOG_FILE="/bak/logs/fsbackup.log"
 
-# -----------------------------
-# Arguments
-# -----------------------------
-SNAPSHOT_TYPE="${1:-}"
-shift || true
-
+SNAPSHOT_TYPE=""
 CLASS=""
 DRY_RUN=0
-REPLACE_EXISTING=0
+REPLACE=0
 
-# -----------------------------
-# Parse flags
-# -----------------------------
+usage() {
+  cat <<'EOF'
+Usage:
+  fs-runner.sh <snapshot-type> --class <class> [--dry-run] [--replace-existing]
+
+Options:
+  --class <name>         Target class from targets.yml
+  --dry-run              Rsync dry-run only
+  --replace-existing     Replace snapshot if it already exists
+EOF
+}
+
+# -----------------------------------------------------------------------------
+# Argument parsing
+# -----------------------------------------------------------------------------
+if [[ $# -lt 1 ]]; then
+  usage
+  exit 2
+fi
+
+SNAPSHOT_TYPE="$1"
+shift
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --class)
-      CLASS="$2"
-      shift 2
-      ;;
-    --dry-run)
-      DRY_RUN=1
-      shift
-      ;;
-    --replace-existing)
-      REPLACE_EXISTING=1
-      shift
-      ;;
+    --class) CLASS="$2"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --replace-existing) REPLACE=1; shift ;;
+    -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2
+      usage >&2
       exit 2
       ;;
   esac
 done
 
-# -----------------------------
-# Validation
-# -----------------------------
-[[ -n "$SNAPSHOT_TYPE" ]] || { echo "Missing snapshot type"; exit 2; }
 [[ -n "$CLASS" ]] || { echo "Missing --class"; exit 2; }
 
-command -v yq >/dev/null || { echo "ERROR: yq not found"; exit 2; }
-command -v jq >/dev/null || { echo "ERROR: jq not found"; exit 2; }
+# -----------------------------------------------------------------------------
+# Sanity checks
+# -----------------------------------------------------------------------------
+command -v yq >/dev/null || { echo "yq not found"; exit 2; }
+command -v jq >/dev/null || { echo "jq not found"; exit 2; }
+command -v rsync >/dev/null || { echo "rsync not found"; exit 2; }
+command -v fs-doctor.sh >/dev/null || { echo "fs-doctor.sh not found in PATH"; exit 2; }
 
-if ! yq eval ".${CLASS}" "$CONFIG_FILE" >/dev/null 2>&1; then
-  echo "Class not found in targets.yml: $CLASS" >&2
-  exit 2
-fi
+mkdir -p "$SNAPSHOT_ROOT" "$TMP_ROOT" "$(dirname "$LOG_FILE")"
 
-START_TS="$(date +%s)"
-RUNNER_METRICS="${METRICS_DIR}/fs_runner__${SNAPSHOT_TYPE}_${CLASS}.prom"
-
-# -----------------------------
+# -----------------------------------------------------------------------------
 # Header
-# -----------------------------
-TARGET_COUNT="$(yq eval ".${CLASS} | length" "$CONFIG_FILE")"
-
+# -----------------------------------------------------------------------------
 echo
 echo "fs-runner starting"
 echo "  Snapshot type: $SNAPSHOT_TYPE"
 echo "  Class:         $CLASS"
-echo "  Targets:       $TARGET_COUNT"
 echo "  Dry-run:       $DRY_RUN"
-echo "  Replace:       $REPLACE_EXISTING"
+echo "  Replace:       $REPLACE"
 echo
 
-# =============================================================================
-# PREFLIGHT
-# =============================================================================
-echo "Running preflight checks..."
-echo
-
-mapfile -t PREFLIGHT_TARGETS < <(
-  yq eval -o=json ".${CLASS}" "$CONFIG_FILE" | jq -c '.[]'
-)
-
-
-
-PREFLIGHT_FAILED=0
-
-for target in "${PREFLIGHT_TARGETS[@]}"; do
-  TARGET_ID="$(jq -r '.id' <<<"$target")"
-  HOST="$(jq -r '.host' <<<"$target")"
-  SOURCE="$(jq -r '.source' <<<"$target")"
-
-  printf "→ %-25s " "$TARGET_ID"
-
-  if [[ "$HOST" == "fs" || "$HOST" == "local" ]]; then
-    if [[ ! -e "$SOURCE" ]]; then
-      echo "FAIL (missing local path)"
-      PREFLIGHT_FAILED=1
-      continue
-    fi
-  else
-    if ! sudo -u fsbackup ssh -o BatchMode=yes -o ConnectTimeout=5 "$HOST" \
-         "test -e '$SOURCE'" >/dev/null 2>&1; then
-      echo "FAIL (ssh or path)"
-      PREFLIGHT_FAILED=1
-      continue
-    fi
-  fi
-
-  echo "OK"
-done
-
-if [[ "$PREFLIGHT_FAILED" -eq 1 ]]; then
+# -----------------------------------------------------------------------------
+# Preflight: fs-doctor gate (authoritative)
+# -----------------------------------------------------------------------------
+echo "Running fsbackup doctor gate..."
+if ! fs-doctor.sh --class "$CLASS"; then
   echo
-  echo "Preflight failed — aborting snapshot run."
-  exit 2
+  echo "Preflight failed — fs-doctor reported failures. Aborting."
+  exit 1
 fi
-
-echo
-echo "Preflight passed."
+echo "Preflight OK"
 echo
 
-# =============================================================================
-# RUNNER
-# =============================================================================
-mapfile -t TARGETS < <(
-  yq eval -o=json ".${CLASS}" "$CONFIG_FILE" | jq -c '.[]'
-)
-
+# -----------------------------------------------------------------------------
+# Load targets
+# -----------------------------------------------------------------------------
+mapfile -t TARGETS < <(yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE")
 TOTAL="${#TARGETS[@]}"
-SUCCEEDED=0
-FAILED=0
-FAILED_TARGETS=()
 
-for target in "${TARGETS[@]}"; do
-  TARGET_ID="$(jq -r '.id' <<<"$target")"
-  HOST="$(jq -r '.host' <<<"$target")"
-  SOURCE="$(jq -r '.source' <<<"$target")"
+SUCCESS=0
+FAIL=0
+FAILED_IDS=()
 
-  echo "→ Target: $TARGET_ID"
-  echo "  Host:   $HOST"
-  echo "  Source: $SOURCE"
+# -----------------------------------------------------------------------------
+# Snapshot loop
+# -----------------------------------------------------------------------------
+for t in "${TARGETS[@]}"; do
+  id="$(jq -r '.id' <<<"$t")"
+  host="$(jq -r '.host' <<<"$t")"
+  src="$(jq -r '.source' <<<"$t")"
 
-  if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "  DRY-RUN: would invoke snapshot"
+  echo "→ Target: $id"
+  echo "  Host:   $host"
+  echo "  Source: $src"
+
+  SNAPSHOT_DIR="${SNAPSHOT_ROOT}/${id}/${SNAPSHOT_TYPE}"
+  TMP_DIR="${TMP_ROOT}/${id}"
+  RSYNC_LOG="${TMP_DIR}/rsync.log"
+
+  mkdir -p "$TMP_DIR"
+
+  if [[ -d "$SNAPSHOT_DIR" && "$REPLACE" -eq 0 ]]; then
+    echo "  Skipping (snapshot exists)"
+    ((SUCCESS++))
     echo
     continue
   fi
 
-  CMD=(
-    "$SNAPSHOT_SCRIPT"
-    --target-id "$TARGET_ID"
-    --class "$CLASS"
-    --host "$HOST"
-    --source "$SOURCE"
-    --snapshot-type "$SNAPSHOT_TYPE"
+  rm -rf "$SNAPSHOT_DIR"
+
+  RSYNC_OPTS=(
+    -a
+    --delete
+    --numeric-ids
+    --relative
+    --timeout=60
+    --log-file="$RSYNC_LOG"
   )
 
-  if [[ "$REPLACE_EXISTING" -eq 1 ]]; then
-    CMD+=(--replace-existing)
-  fi
+  [[ "$DRY_RUN" -eq 1 ]] && RSYNC_OPTS+=(-n)
 
-  "${CMD[@]}"
-  RC=$?
-
-  if [[ "$RC" -eq 0 ]]; then
-    ((SUCCEEDED++))
+  if [[ "$host" == "fs" ]]; then
+    # Local rsync
+    if rsync "${RSYNC_OPTS[@]}" "${src%/}/" "$SNAPSHOT_DIR/"; then
+      ((SUCCESS++))
+    else
+      echo "  ERROR: rsync failed (local)"
+      ((FAIL++))
+      FAILED_IDS+=("$id")
+    fi
   else
-    ((FAILED++))
-    FAILED_TARGETS+=("$TARGET_ID")
+    # Remote rsync
+    if rsync "${RSYNC_OPTS[@]}" \
+        "${BACKUP_SSH_USER}@${host}:${src%/}/" \
+        "$SNAPSHOT_DIR/"; then
+      ((SUCCESS++))
+    else
+      echo "  ERROR: rsync failed (remote)"
+      ((FAIL++))
+      FAILED_IDS+=("$id")
+    fi
   fi
 
   echo
 done
 
-# =============================================================================
-# SUMMARY
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Summary
+# -----------------------------------------------------------------------------
 echo "fs-runner summary"
 echo "  Snapshot type: $SNAPSHOT_TYPE"
 echo "  Class:         $CLASS"
 echo "  Total targets: $TOTAL"
-echo "  Succeeded:     $SUCCEEDED"
-echo "  Failed:        $FAILED"
-
-if [[ "$FAILED" -gt 0 ]]; then
-  echo
-  echo "  Failed targets:"
-  for t in "${FAILED_TARGETS[@]}"; do
-    echo "    - $t"
-  done
-fi
-
+echo "  Succeeded:     $SUCCESS"
+echo "  Failed:        $FAIL"
 echo
 
-# =============================================================================
-# METRICS
-# =============================================================================
-END_TS="$(date +%s)"
-DURATION="$((END_TS - START_TS))"
-
-cat >"$RUNNER_METRICS" <<EOF
-# HELP fs_runner_targets_total Total targets evaluated
-# TYPE fs_runner_targets_total gauge
-fs_runner_targets_total $TOTAL
-
-# HELP fs_runner_targets_succeeded Targets succeeded
-# TYPE fs_runner_targets_succeeded gauge
-fs_runner_targets_succeeded $SUCCEEDED
-
-# HELP fs_runner_targets_failed Targets failed
-# TYPE fs_runner_targets_failed gauge
-fs_runner_targets_failed $FAILED
-
-# HELP fs_runner_status Runner status (0=success,1=partial failure)
-# TYPE fs_runner_status gauge
-fs_runner_status $([[ "$FAILED" -gt 0 ]] && echo 1 || echo 0)
-
-# HELP fs_runner_duration_seconds Total run duration
-# TYPE fs_runner_duration_seconds gauge
-fs_runner_duration_seconds $DURATION
-EOF
-
-# =============================================================================
-# EXIT
-# =============================================================================
-if [[ "$FAILED" -gt 0 ]]; then
+if [[ "$FAIL" -gt 0 ]]; then
+  echo "  Failed targets:"
+  for f in "${FAILED_IDS[@]}"; do
+    echo "    - $f"
+  done
+  echo
   exit 1
 fi
 

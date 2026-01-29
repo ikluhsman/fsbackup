@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 # =============================================================================
 # fsbackup_doctor.sh
@@ -102,9 +102,9 @@ printf "%-28s %-6s %-s\n" "TARGET" "STAT" "DETAIL"
 printf "%-28s %-6s %-s\n" "----------------------------" "------" "------------------------------"
 
 for t in "${TARGETS[@]}"; do
-  id="$(jq -r '.id' <<<"$t")"
-  host="$(jq -r '.host' <<<"$t")"
-  src="$(jq -r '.source' <<<"$t")"
+  id="$(jq -r '.id // empty' <<<"$t")"
+  host="$(jq -r '.host // empty' <<<"$t")"
+  src="$(jq -r '.source // empty' <<<"$t")"
 
   # Normalize empty/null
   [[ "$id" == "null" ]] && id=""

@@ -143,7 +143,8 @@ class2:
 
   - id: mdns.avahi
     host: mdns
-    source: /etc/avahi/avahi_daemon.conf
+    source: /etc/avahi/avahi-daemon.conf
+    type: file
 
   - id: apache.config
     host: fs
