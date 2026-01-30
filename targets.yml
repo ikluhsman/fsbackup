@@ -63,7 +63,13 @@ class1:
     host: denhpsvr1
     source: /docker/volumes/zabbix_server_data
     type: dir
-    rsync_opts: "--exclude=_data/zabbix_db/postmaster.pid"
+    rsync_opts: "--exclude=_data/zabbix_db"
+
+  - id: zabbix.server.db
+    host: denhpsvr1
+    source: /exports/zabbix
+    type: dir
+
   # =============
   # denhpsvr2
   # =============
