@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -u
-
-SNAPSHOT_ROOT="/bak/snapshots"
+. /etc/fsbackup/fsbackup.conf
 LOG_FILE="/var/lib/fsbackup/log/backup.log"
 LOCK_FILE="/var/lock/fsbackup.lock"
 

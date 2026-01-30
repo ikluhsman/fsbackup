@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -u
-
-SNAPSHOT_ROOT="/bak/snapshots"
+. /etc/fsbackup/fsbackup.conf
 BACKUP_SSH_USER="backup"
 
 usage() {

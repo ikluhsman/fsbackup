@@ -2,23 +2,21 @@
 set -u
 set -o pipefail
 
-# =============================================================================
-# fs-runner.sh — snapshot executor
-# =============================================================================
+. /etc/fsbackup/fsbackup.conf
 
 CONFIG_FILE="/etc/fsbackup/targets.yml"
-BACKUP_ROOT="/bak/snapshots"
+
 LOG_DIR="/var/lib/fsbackup/log"
 LOG_FILE="${LOG_DIR}/backup.log"
 
 NODE_TEXTFILE="/var/lib/node_exporter/textfile_collector"
-PROM_TMP="$(mktemp)"
+PROM_OUT="${NODE_TEXTFILE}/fsbackup_excludes.prom"
 
 BACKUP_SSH_USER="backup"
 MAX_EXCLUDES=15
 
-SNAPSHOT_TYPE="$1"   # daily | weekly | monthly
-shift
+SNAPSHOT_TYPE="${1:-}"
+shift || true
 
 CLASS=""
 DRY_RUN=0
@@ -29,42 +27,63 @@ usage() {
   exit 2
 }
 
+[[ "$SNAPSHOT_TYPE" =~ ^(daily|weekly|monthly)$ ]] || usage
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --class) CLASS="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
-    --replace-existing) REPLACE=1; shift ;;
+    --replace-existing|--replace) REPLACE=1; shift ;;
     *) usage ;;
   esac
 done
 
 [[ -n "$CLASS" ]] || usage
+
+command -v yq >/dev/null || { echo "yq not found"; exit 2; }
+command -v jq >/dev/null || { echo "jq not found"; exit 2; }
+command -v ssh >/dev/null || { echo "ssh not found"; exit 2; }
+command -v rsync >/dev/null || { echo "rsync not found"; exit 2; }
+
 mkdir -p "$LOG_DIR"
 
 log() {
   local id="$1"; shift
-  echo "$(date +%Y-%m-%dT%H:%M:%S%z) [$id] $*" | tee -a "$LOG_FILE"
+  echo "$(date +%Y-%m-%dT%H:%M:%S%z) [$id] $*" | tee -a "$LOG_FILE" >/dev/null
 }
 
 is_local_host() {
   local h="$1"
-  [[ "$h" == "localhost" ]] && return 0
-  [[ "$h" == "$(hostname -s)" ]] && return 0
-  [[ "$h" == "$(hostname -f 2>/dev/null)" ]] && return 0
+  local short fqdn
+  short="$(hostname -s)"
+  fqdn="$(hostname -f 2>/dev/null || true)"
 
-  local lip
-  for lip in $(hostname -I 2>/dev/null); do
-    getent hosts "$h" | awk '{print $1}' | grep -qx "$lip" && return 0
-  done
+  [[ "$h" == "localhost" ]] && return 0
+  [[ "$h" == "$short" ]] && return 0
+  [[ -n "$fqdn" && "$h" == "$fqdn" ]] && return 0
+
+  if getent hosts "$h" >/dev/null 2>&1; then
+    local target_ips local_ips ip lip
+    target_ips="$(getent hosts "$h" | awk '{print $1}')"
+    local_ips="$(hostname -I 2>/dev/null || true)"
+    for ip in $target_ips; do
+      for lip in $local_ips; do
+        [[ "$ip" == "$lip" ]] && return 0
+      done
+    done
+  fi
+
   return 1
 }
+
+SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5)
 
 mapfile -t TARGETS < <(
   yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE" | jq -c .
 )
 
 DATE_STR="$(date +%F)"
-DEST_BASE="${BACKUP_ROOT}/${SNAPSHOT_TYPE}/${DATE_STR}/${CLASS}"
+DEST_BASE="${SNAPSHOT_ROOT}/${SNAPSHOT_TYPE}/${DATE_STR}/${CLASS}"
 
 echo
 echo "fs-runner starting"
@@ -74,6 +93,8 @@ echo "  Targets:       ${#TARGETS[@]}"
 echo "  Dry-run:       $DRY_RUN"
 echo "  Replace:       $REPLACE"
 echo
+
+mkdir -p "$DEST_BASE" || { echo "Cannot create destination: $DEST_BASE"; exit 2; }
 
 # =============================================================================
 # PREFLIGHT
@@ -88,10 +109,10 @@ for t in "${TARGETS[@]}"; do
   if is_local_host "$host"; then
     [[ -e "$src" ]] || { echo "→ $id FAIL (missing)"; exit 1; }
   else
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-      "${BACKUP_SSH_USER}@${host}" "test -e '$src'" \
-      || { echo "→ $id FAIL (ssh/path)"; exit 1; }
+    ssh "${SSH_OPTS[@]}" "${BACKUP_SSH_USER}@${host}" "test -e '$src'" \
+      >/dev/null 2>&1 || { echo "→ $id FAIL (ssh/path)"; exit 1; }
   fi
+
   echo "→ $id OK"
 done
 
@@ -106,6 +127,18 @@ TOTAL=0
 SUCCEEDED=0
 FAILED=0
 
+PROM_TMP="$(mktemp)"
+
+# Prometheus headers
+cat >"$PROM_TMP" <<'EOF'
+# HELP fsbackup_excludes_total Total auto-excluded paths for this target in this run
+# TYPE fsbackup_excludes_total gauge
+# HELP fsbackup_excludes_added_last_run Count of excludes added during retries for this target in this run
+# TYPE fsbackup_excludes_added_last_run gauge
+# HELP fsbackup_auto_exclude_used Whether auto-exclude logic was used (1=yes,0=no)
+# TYPE fsbackup_auto_exclude_used gauge
+EOF
+
 for t in "${TARGETS[@]}"; do
   ((TOTAL++))
   id="$(jq -r '.id' <<<"$t")"
@@ -114,44 +147,52 @@ for t in "${TARGETS[@]}"; do
   rsync_opts="$(jq -r '.rsync_opts // empty' <<<"$t")"
 
   DEST="${DEST_BASE}/${id}"
-  EXCLUDE_FILE="$(mktemp)"
-
   mkdir -p "$DEST"
 
   log "$id" "Starting snapshot (${SNAPSHOT_TYPE}) from ${host}:${src}"
 
-  RSYNC_CMD=(rsync -a --delete)
-
+  RSYNC_CMD=(rsync -a --delete --timeout=30)
   [[ "$DRY_RUN" -eq 1 ]] && RSYNC_CMD+=(-n)
   [[ "$REPLACE" -eq 0 ]] && RSYNC_CMD+=(--ignore-existing)
   [[ -n "$rsync_opts" ]] && RSYNC_CMD+=($rsync_opts)
+
+  EXCLUDE_FILE="$(mktemp)"
+  : >"$EXCLUDE_FILE"
 
   EXCLUDES_ADDED=0
   AUTO_EXCLUDE_USED=0
   TOTAL_EXCLUDES=0
 
   while true; do
+    rm -f rsync.err
+
     if is_local_host "$host"; then
-      "${RSYNC_CMD[@]}" \
-        --exclude-from="$EXCLUDE_FILE" \
-        "${src%/}/" "$DEST/" 2>rsync.err && break
+      "${RSYNC_CMD[@]}" --exclude-from="$EXCLUDE_FILE" "${src%/}/" "$DEST/" 2>rsync.err && break
     else
-      "${RSYNC_CMD[@]}" \
-        --exclude-from="$EXCLUDE_FILE" \
-        "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/" 2>rsync.err && break
+      "${RSYNC_CMD[@]}" --exclude-from="$EXCLUDE_FILE" "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/" 2>rsync.err && break
     fi
 
-    err_path="$(grep -oE '/[^"]+' rsync.err | head -n1)"
+    # find first permission-denied path (sender opendir)
+    err_path="$(grep -oE 'opendir "([^"]+)" failed: Permission denied' rsync.err | sed -E 's/opendir "([^"]+)".*/\1/' | head -n1)"
 
-    [[ -z "$err_path" ]] && break
+    # If it wasn't the excludable error, stop retrying
+    if [[ -z "$err_path" ]]; then
+      break
+    fi
 
     if (( TOTAL_EXCLUDES >= MAX_EXCLUDES )); then
-      log "$id" "ERROR exclude ceiling reached (${MAX_EXCLUDES}) at ${err_path}"
+      log "$id" "ERROR exclude ceiling reached (${MAX_EXCLUDES}). Last path: ${err_path}"
       FAILED=$((FAILED+1))
+      rm -f rsync.err "$EXCLUDE_FILE"
       continue 2
     fi
 
-    echo "${err_path}/**" >>"$EXCLUDE_FILE"
+    # Convert absolute path to relative-to-src where possible
+    rel="$err_path"
+    rel="${rel#${src%/}/}"
+    rel="${rel#/}"
+
+    echo "${rel}/**" >>"$EXCLUDE_FILE"
     log "$id" "WARN auto-excluding path: ${err_path}"
 
     ((TOTAL_EXCLUDES++))
@@ -163,7 +204,7 @@ for t in "${TARGETS[@]}"; do
     log "$id" "Snapshot completed successfully"
     ((SUCCEEDED++))
   else
-    log "$id" "ERROR snapshot failed"
+    log "$id" "ERROR snapshot failed (see rsync.err details during run)"
     ((FAILED++))
   fi
 
@@ -176,7 +217,11 @@ EOF
   rm -f rsync.err "$EXCLUDE_FILE"
 done
 
-mv "$PROM_TMP" "${NODE_TEXTFILE}/fsbackup_excludes.prom"
+# Atomic write of prometheus metrics
+tmp2="$(mktemp)"
+cat "$PROM_TMP" >"$tmp2"
+rm -f "$PROM_TMP"
+mv "$tmp2" "$PROM_OUT" 2>/dev/null || rm -f "$tmp2"
 
 echo
 echo "fs-runner summary"

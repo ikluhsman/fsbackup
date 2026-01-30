@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -u
+set -o pipefail
 
 CONFIG_FILE="/etc/fsbackup/targets.yml"
 BACKUP_SSH_USER="backup"
 
 CLASS=""
 SEED_HOSTKEYS=0
+
+NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
+NODEEXP_METRIC="${NODEEXP_DIR}/fsbackup_nodeexp_health.prom"
 
 usage() {
   echo "Usage: fs-doctor.sh --class <class> [--seed-hostkeys]"
@@ -23,6 +27,9 @@ done
 
 command -v yq >/dev/null || { echo "yq not found"; exit 2; }
 command -v jq >/dev/null || { echo "jq not found"; exit 2; }
+command -v ssh >/dev/null || { echo "ssh not found"; exit 2; }
+command -v rsync >/dev/null || { echo "rsync not found"; exit 2; }
+command -v ssh-keyscan >/dev/null || { echo "ssh-keyscan not found"; exit 2; }
 
 mapfile -t TARGETS < <(
   yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE" | jq -c .
@@ -31,23 +38,20 @@ mapfile -t TARGETS < <(
 is_local_host() {
   local h="$1"
 
-  # Normalize
-  local short
+  local short fqdn
   short="$(hostname -s)"
-  local fqdn
   fqdn="$(hostname -f 2>/dev/null || true)"
 
-  # Direct matches
   [[ "$h" == "localhost" ]] && return 0
   [[ "$h" == "$short" ]] && return 0
   [[ -n "$fqdn" && "$h" == "$fqdn" ]] && return 0
 
-  # IP match (covers interface IPs)
   if getent hosts "$h" >/dev/null 2>&1; then
     local target_ips local_ips
     target_ips="$(getent hosts "$h" | awk '{print $1}')"
-    local_ips="$(hostname -I 2>/dev/null)"
+    local_ips="$(hostname -I 2>/dev/null || true)"
 
+    local ip lip
     for ip in $target_ips; do
       for lip in $local_ips; do
         [[ "$ip" == "$lip" ]] && return 0
@@ -59,8 +63,11 @@ is_local_host() {
 }
 
 is_excludable_rsync_error() {
-  grep -qE 'rsync: \[sender\] opendir ".+" failed: Permission denied' <<<"$1"
+  # “opendir … Permission denied” is the one we can auto-exclude later
+  grep -qE 'rsync: \[sender\] opendir ".+" failed: Permission denied \(13\)' <<<"$1"
 }
+
+SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5)
 
 TOTAL="${#TARGETS[@]}"
 PASS=0
@@ -81,11 +88,11 @@ for t in "${TARGETS[@]}"; do
   src="$(jq -r '.source // empty' <<<"$t")"
   rsync_opts="$(jq -r '.rsync_opts // empty' <<<"$t")"
 
-  [[ -z "$id" || -z "$host" || -z "$src" ]] && {
-    printf "%-28s FAIL   bad target entry\n" "${id:-<missing>}"
+  if [[ -z "$id" || -z "$host" || -z "$src" ]]; then
+    printf "%-28s %-6s %s\n" "${id:-<missing>}" "FAIL" "bad target entry"
     ((FAIL++))
     continue
-  }
+  fi
 
   if is_local_host "$host"; then
     if [[ -e "$src" ]]; then
@@ -98,39 +105,41 @@ for t in "${TARGETS[@]}"; do
     continue
   fi
 
-  # SSH check
-  if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-      "${BACKUP_SSH_USER}@${host}" "echo ok" >/dev/null 2>&1; then
-    printf "%-28s FAIL   ssh failed\n" "$id"
+  # SSH reachability (non-interactive)
+  if ! ssh "${SSH_OPTS[@]}" "${BACKUP_SSH_USER}@${host}" "echo ok" >/dev/null 2>&1; then
+    printf "%-28s %-6s %s\n" "$id" "FAIL" "ssh failed"
     ((FAIL++))
     continue
   fi
 
-  # Path check
-  if ! ssh "${BACKUP_SSH_USER}@${host}" "test -e '$src'" >/dev/null 2>&1; then
-    printf "%-28s FAIL   remote missing: %s\n" "$id" "$src"
+  # Remote path existence (non-interactive)
+  if ! ssh "${SSH_OPTS[@]}" "${BACKUP_SSH_USER}@${host}" "test -e '$src'" >/dev/null 2>&1; then
+    printf "%-28s %-6s %s\n" "$id" "FAIL" "remote missing: $src"
     ((FAIL++))
     continue
   fi
 
-  # rsync dry-run
-  RSYNC_ERR="$(
-    "${RSYNC_CMD[@]}" \
-      "${BACKUP_SSH_USER}@${host}:${src%/}/" \
-      "/tmp/fsdoctor_${id}" 2>&1 >/dev/null
+  # rsync dry-run check (no sudo)
+  RSYNC_CMD=(rsync -a -n --timeout=10)
+  [[ -n "$rsync_opts" ]] && RSYNC_CMD+=($rsync_opts)
+
+  RSYNC_ERR="$("${RSYNC_CMD[@]}" \
+    "${BACKUP_SSH_USER}@${host}:${src%/}/" \
+    "/tmp/fsdoctor_${id//[^a-zA-Z0-9_.-]/_}" \
+    >/dev/null 2>&1
   )"
+  rc=$?
 
-  if [[ $? -eq 0 ]]; then
-    printf "%-28s OK     ssh+path+rsync dry-run OK\n" "$id"
+  if [[ $rc -eq 0 ]]; then
+    printf "%-28s %-6s %s\n" "$id" "OK" "ssh+path+rsync dry-run OK"
     ((PASS++))
   elif is_excludable_rsync_error "$RSYNC_ERR"; then
-    printf "%-28s WARN   rsync permission-denied (auto-excludable)\n" "$id"
+    printf "%-28s %-6s %s\n" "$id" "WARN" "rsync permission-denied (auto-excludable)"
     ((PASS++))
   else
-    printf "%-28s FAIL   rsync failed\n" "$id"
+    printf "%-28s %-6s %s\n" "$id" "FAIL" "rsync failed"
     ((FAIL++))
   fi
-
 done
 
 echo
@@ -139,13 +148,28 @@ echo "  Total: $TOTAL"
 echo "  OK:    $PASS"
 echo "  FAIL:  $FAIL"
 echo
-NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
 
+# Node exporter textfile collector health (two things):
+# - can THIS script read+execute the directory?
+# - can node_exporter USER read it? (best effort check via name "nodeexp_txt" or service user)
+nodeexp_ok=0
 if [[ -d "$NODEEXP_DIR" && -r "$NODEEXP_DIR" && -x "$NODEEXP_DIR" ]]; then
-  echo "node_exporter_textfile_access 1"
+  nodeexp_ok=1
+fi
+
+echo "node_exporter_textfile_access ${nodeexp_ok}"
+
+# Optional: write a proper metric file (atomic)
+tmp="$(mktemp)"
+cat >"$tmp" <<EOF
+# HELP fsbackup_node_exporter_textfile_access Whether fsbackup can read the node_exporter textfile collector dir (1=ok,0=bad)
+# TYPE fsbackup_node_exporter_textfile_access gauge
+fsbackup_node_exporter_textfile_access ${nodeexp_ok}
+EOF
+if [[ -d "$NODEEXP_DIR" ]]; then
+  mv "$tmp" "$NODEEXP_METRIC" 2>/dev/null || rm -f "$tmp"
 else
-  echo "WARN: node_exporter cannot read textfile collector"
-  echo "node_exporter_textfile_access 0"
+  rm -f "$tmp"
 fi
 
 exit 0
