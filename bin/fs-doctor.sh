@@ -10,6 +10,10 @@ SEED_HOSTKEYS=0
 
 NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
 NODEEXP_METRIC="${NODEEXP_DIR}/fsbackup_nodeexp_health.prom"
+ORPHAN_METRIC="${NODEEXP_DIR}/fsbackup_orphans.prom"
+
+ORPHAN_LOG="/var/lib/fsbackup/log/fs-orphans.log"
+SNAPSHOT_ROOT="/backup/snapshots"
 
 usage() {
   echo "Usage: fs-doctor.sh --class <class> [--seed-hostkeys]"
@@ -63,7 +67,6 @@ is_local_host() {
 }
 
 is_excludable_rsync_error() {
-  # “opendir … Permission denied” is the one we can auto-exclude later
   grep -qE 'rsync: \[sender\] opendir ".+" failed: Permission denied \(13\)' <<<"$1"
 }
 
@@ -105,21 +108,18 @@ for t in "${TARGETS[@]}"; do
     continue
   fi
 
-  # SSH reachability (non-interactive)
   if ! ssh "${SSH_OPTS[@]}" "${BACKUP_SSH_USER}@${host}" "echo ok" >/dev/null 2>&1; then
     printf "%-28s %-6s %s\n" "$id" "FAIL" "ssh failed"
     ((FAIL++))
     continue
   fi
 
-  # Remote path existence (non-interactive)
   if ! ssh "${SSH_OPTS[@]}" "${BACKUP_SSH_USER}@${host}" "test -e '$src'" >/dev/null 2>&1; then
     printf "%-28s %-6s %s\n" "$id" "FAIL" "remote missing: $src"
     ((FAIL++))
     continue
   fi
 
-  # rsync dry-run check (no sudo)
   RSYNC_CMD=(rsync -a -n --timeout=10)
   [[ -n "$rsync_opts" ]] && RSYNC_CMD+=($rsync_opts)
 
@@ -149,28 +149,69 @@ echo "  OK:    $PASS"
 echo "  FAIL:  $FAIL"
 echo
 
-# Node exporter textfile collector health (two things):
-# - can THIS script read+execute the directory?
-# - can node_exporter USER read it? (best effort check via name "nodeexp_txt" or service user)
+# -----------------------------------------------------------------------------
+# Node exporter textfile collector health
+# -----------------------------------------------------------------------------
 nodeexp_ok=0
 if [[ -d "$NODEEXP_DIR" && -r "$NODEEXP_DIR" && -x "$NODEEXP_DIR" ]]; then
   nodeexp_ok=1
 fi
 
-echo "node_exporter_textfile_access ${nodeexp_ok}"
-
-# Optional: write a proper metric file (atomic)
 tmp="$(mktemp)"
 cat >"$tmp" <<EOF
 # HELP fsbackup_node_exporter_textfile_access Whether fsbackup can read the node_exporter textfile collector dir (1=ok,0=bad)
 # TYPE fsbackup_node_exporter_textfile_access gauge
 fsbackup_node_exporter_textfile_access ${nodeexp_ok}
 EOF
-if [[ -d "$NODEEXP_DIR" ]]; then
-  mv "$tmp" "$NODEEXP_METRIC" 2>/dev/null || rm -f "$tmp"
-else
-  rm -f "$tmp"
-fi
+mv "$tmp" "$NODEEXP_METRIC" 2>/dev/null || rm -f "$tmp"
+
+# -----------------------------------------------------------------------------
+# Orphan snapshot detection (Option A — global scan)
+# -----------------------------------------------------------------------------
+mkdir -p "$(dirname "$ORPHAN_LOG")"
+
+mapfile -t VALID_TARGET_IDS < <(
+  yq eval '.. | select(has("id")) | .id' "$CONFIG_FILE" | sort -u
+)
+
+declare -A VALID_MAP
+for id in "${VALID_TARGET_IDS[@]}"; do
+  VALID_MAP["$id"]=1
+done
+
+declare -A ORPHAN_COUNT=(["daily"]=0 ["weekly"]=0 ["monthly"]=0)
+
+now="$(date -Is)"
+
+for tier in daily weekly monthly; do
+  tier_dir="${SNAPSHOT_ROOT}/${tier}"
+  [[ -d "$tier_dir" ]] || continue
+
+  while IFS= read -r snapshot_dir; do
+    target_id="$(basename "$snapshot_dir")"
+    class="$(basename "$(dirname "$snapshot_dir")")"
+    SNAP_DATE="$(basename "$(dirname "$(dirname "$snapshot_dir")")")"
+
+    if [[ -z "${VALID_MAP[$target_id]+x}" ]]; then
+      ORPHAN_COUNT["$tier"]=$((ORPHAN_COUNT["$tier"] + 1))
+      echo "${now} tier=${tier} date=${SNAP_DATE} class=${class} orphan=${target_id}" >>"$ORPHAN_LOG"
+    fi
+  done < <(
+    find "$tier_dir" -mindepth 3 -maxdepth 3 -type d
+  )
+done
+
+
+tmp="$(mktemp)"
+cat >"$tmp" <<EOF
+# HELP fsbackup_orphan_snapshots_total Number of orphaned snapshot targets by tier
+# TYPE fsbackup_orphan_snapshots_total gauge
+fsbackup_orphan_snapshots_total{tier="daily"}   ${ORPHAN_COUNT[daily]}
+fsbackup_orphan_snapshots_total{tier="weekly"}  ${ORPHAN_COUNT[weekly]}
+fsbackup_orphan_snapshots_total{tier="monthly"} ${ORPHAN_COUNT[monthly]}
+EOF
+
+mv "$tmp" "$ORPHAN_METRIC" 2>/dev/null || rm -f "$tmp"
 
 exit 0
 

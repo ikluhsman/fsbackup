@@ -86,7 +86,6 @@ mkdir -p "$METRICS_DIR"
   echo "fsbackup_ssh_host_key_present{host=\"$HOST\",fingerprint=\"$FP\"} 1"
 } >>"$METRIC_FILE"
 
-chown fsbackup:"$GROUP_NODEEXP" "$METRIC_FILE"
 chmod 664 "$METRIC_FILE"
 
 exit 0

@@ -193,7 +193,6 @@ fsbackup_runner_last_exit_code{class="${CLASS}"} ${EXIT_CODE}
 EOF
 
 mv "$PROM_TMP" "${NODE_TEXTFILE_DIR}/fsbackup_runner_${CLASS}.prom"
-
 echo
 echo "fs-runner summary"
 echo "  Total:     $TOTAL"
