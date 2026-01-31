@@ -85,27 +85,28 @@ retained="$(ls -1 "$EXPORT_ROOT"/*.sql.gz 2>/dev/null | wc -l)"
 # Prometheus metrics (atomic)
 # -----------------------------------------------------------------------------
 tmp="$(mktemp)"
+HOST="$(hostname -s)"
 
 cat >"$tmp" <<EOF
 # HELP fsbackup_db_export_last_success Last DB export success (1=ok,0=fail)
 # TYPE fsbackup_db_export_last_success gauge
-fsbackup_db_export_last_success{app="${APP}",engine="${DB_ENGINE}"} $((status==0))
+fsbackup_db_export_last_success{host="${HOST}",app="${APP}",engine="${DB_ENGINE}"} $((status==0))
 
 # HELP fsbackup_db_export_last_timestamp Last DB export timestamp (epoch)
 # TYPE fsbackup_db_export_last_timestamp gauge
-fsbackup_db_export_last_timestamp{app="${APP}",engine="${DB_ENGINE}"} ${END_TS}
+fsbackup_db_export_last_timestamp{host="${HOST}",app="${APP}",engine="${DB_ENGINE}"} ${END_TS}
 
 # HELP fsbackup_db_export_last_size_bytes Size of last DB export
 # TYPE fsbackup_db_export_last_size_bytes gauge
-fsbackup_db_export_last_size_bytes{app="${APP}",engine="${DB_ENGINE}"} ${size}
+fsbackup_db_export_last_size_bytes{host="${HOST}",app="${APP}",engine="${DB_ENGINE}"} ${size}
 
 # HELP fsbackup_db_export_duration_seconds Duration of DB export
 # TYPE fsbackup_db_export_duration_seconds gauge
-fsbackup_db_export_duration_seconds{app="${APP}",engine="${DB_ENGINE}"} ${duration}
+fsbackup_db_export_duration_seconds{host="${HOST}",app="${APP}",engine="${DB_ENGINE}"} ${duration}
 
 # HELP fsbackup_db_export_retained_files Retained DB exports
 # TYPE fsbackup_db_export_retained_files gauge
-fsbackup_db_export_retained_files{app="${APP}"} ${retained}
+fsbackup_db_export_retained_files{host="${HOST}",app="${APP}"} ${retained}
 EOF
 
 chmod 0644 "$tmp"

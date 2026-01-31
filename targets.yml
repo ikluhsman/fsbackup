@@ -30,12 +30,11 @@ class1:
     host: fs
     source: /var/www/src
     type: dir
-
-      #- id: plex.config
-      #host: fs
-      #source: /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
-      #type: dir
-      #rsync_opts: "--exclude=.LocalAdminToken"
+  
+  - id: paperlessngx.db
+    host: fs
+    source: /backup/exports/paperlessngx
+    type: dir
 
   # =============
   # denhpsvr1
@@ -81,6 +80,10 @@ class1:
   - id: ipam.data
     host: denhpsvr2
     source: /docker/volumes/ipam_data
+
+  - id: ipam.db
+    host: denhpsvr2
+    source: /exports/ipam
 
   - id: lube-logger.data
     host: denhpsvr2
@@ -193,7 +196,7 @@ class2:
     host: ns1
     source: /var/webmin
     type: dir
-    rsync_opts: "--no-owner --no-group --no-perms --omit-dir-times --exclude=webmin.log --exclude=modules/authentic-theme/"
+    rsync_opts: "--no-owner --no-group --no-perms --omit-dir-times --exclude=webmin.log --exclude=miniserv.log --exclude=modules/authentic-theme/"
 
   # =================
   # ns2
