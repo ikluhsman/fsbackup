@@ -32,7 +32,7 @@ set +a
 : "${DB_USER:?missing DB_USER}"
 : "${DB_PASSWORD:?missing DB_PASSWORD}"
 : "${EXPORT_ROOT:?missing EXPORT_ROOT}"
-BACKUP_USER="${BACKUP_USER:backup}"
+BACKUP_USER="${BACKUP_USER:-backup}"
 RETENTION="${RETENTION:-14}"
 
 HOST="$(hostname -s)"
