@@ -36,6 +36,11 @@ class1:
     source: /backup/exports/paperlessngx
     type: dir
 
+  - id: homeassistant.db
+    host: fs
+    source: /backup/exports/homeassistant
+    type: dir
+
   # =============
   # denhpsvr1
   # =============
@@ -83,7 +88,7 @@ class1:
 
   - id: ipam.db
     host: denhpsvr2
-    source: /exports/ipam
+    source: /exports/phpipam
 
   - id: lube-logger.data
     host: denhpsvr2
