@@ -32,7 +32,7 @@ set +a
 : "${DB_USER:?missing DB_USER}"
 : "${DB_PASSWORD:?missing DB_PASSWORD}"
 : "${EXPORT_ROOT:?missing EXPORT_ROOT}"
-
+BACKUP_USER="${BACKUP_USER:backup}"
 RETENTION="${RETENTION:-14}"
 
 HOST="$(hostname -s)"
@@ -89,6 +89,7 @@ fi
 if [[ -s "$EXPORT_FILE" ]]; then
   SIZE="$(stat -c %s "$EXPORT_FILE")"
   STATUS=0
+  chown $BACKUP_USER:$BACKUP_USER "$EXPORT_FILE"
   echo "[$(date -Is)] Export complete (${SIZE} bytes, compressed)"
 else
   echo "ERROR: export file missing or empty" >&2
