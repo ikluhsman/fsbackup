@@ -114,6 +114,7 @@ fs_db_export_size_bytes{db="${DB_NAME}",engine="${DB_ENGINE}",host="${HOST}"} ${
 EOF
 
 chmod 0644 "$tmp"
+chown $BACKUP_USER:nodeexp_txt "$tmp"
 mv "$tmp" "$METRICS_FILE"
 
 # ------------------------------------------------------------------
