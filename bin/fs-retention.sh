@@ -56,6 +56,12 @@ log "[fs-retention] Complete (daily=${REM_DAILY}, weekly=${REM_WEEKLY}, monthly=
 # Metrics
 now="$(date +%s)"
 tmp="$(mktemp)"
+
+## Ensure unset and empty values are set to 0.
+REM_DAILY="${REM_DAILY:-0}"
+REM_WEEKLY="${REM_WEEKLY:-0}"
+REM_MONTHLY="${REM_MONTHLY:-0}"
+
 cat >"$tmp" <<EOF
 # HELP fsbackup_retention_last_run_seconds Unix timestamp of last retention run
 # TYPE fsbackup_retention_last_run_seconds gauge
