@@ -13,6 +13,7 @@ LOG_DIR="/var/lib/fsbackup/log"
 LOG_FILE="${LOG_DIR}/annual-promote.log"
 
 NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
+PROM_TMP="$(mktemp)"
 PROM_OUT="${NODEEXP_DIR}/fsbackup_annual_promote.prom"
 
 DRY_RUN=0
@@ -34,16 +35,13 @@ done
 [[ -n "$YEAR" ]] || usage
 mkdir -p "$LOG_DIR"
 
-if [[ -z "$YEAR" ]]; then
-  YEAR="$(date -d 'last year' +%Y)"
-fi
-
 log() {
   echo "$(date -Is) [annual] $*" | tee -a "$LOG_FILE"
 }
 
 SRC="${SNAPSHOT_ROOT}/monthly/${YEAR}-12/class1"
 DST="${SNAPSHOT_ROOT}/annual/${YEAR}/class1"
+NOW_EPOCH="$(date +%s)"
 
 log "Starting annual promote"
 log "  Year:    ${YEAR}"
@@ -56,20 +54,32 @@ log "  Dry-run: ${DRY_RUN}"
 # -----------------------------------------------------------------------------
 if [[ ! -d "$SRC" ]]; then
   log "INFO December monthly not found, skipping"
-  cat >"$PROM_OUT" <<EOF
+
+  cat >"$PROM_TMP" <<EOF
 fsbackup_annual_promote_success{year="${YEAR}"} 0
 fsbackup_annual_promote_skipped{year="${YEAR}",reason="missing_source"} 1
+fsbackup_annual_promote_last_run ${NOW_EPOCH}
 EOF
-exit 0
+
+  chgrp nodeexp_txt "$PROM_TMP"
+  chmod 0644 "$PROM_TMP"
+  mv "$PROM_TMP" "$PROM_OUT"
+  exit 0
 fi
 
 if [[ -d "$DST" ]]; then
   log "INFO Annual snapshot already exists, skipping"
-  cat >"$PROM_OUT" <<EOF
+
+  cat >"$PROM_TMP" <<EOF
 fsbackup_annual_promote_success{year="${YEAR}"} 1
 fsbackup_annual_promote_skipped{year="${YEAR}",reason="already_exists"} 1
+fsbackup_annual_promote_last_run ${NOW_EPOCH}
 EOF
-exit 0
+
+  chgrp nodeexp_txt "$PROM_TMP"
+  chmod 0644 "$PROM_TMP"
+  mv "$PROM_TMP" "$PROM_OUT"
+  exit 0
 fi
 
 # -----------------------------------------------------------------------------
@@ -90,13 +100,15 @@ log "OK annual snapshot created (${BYTES} bytes)"
 # -----------------------------------------------------------------------------
 # Metrics
 # -----------------------------------------------------------------------------
-cat >"$PROM_OUT" <<EOF
+cat >"$PROM_TMP" <<EOF
 fsbackup_annual_promote_success{year="${YEAR}"} 1
 fsbackup_annual_snapshot_bytes{year="${YEAR}"} ${BYTES}
+fsbackup_annual_promote_last_run ${NOW_EPOCH}
 EOF
 
-chgrp nodeexp_txt "$PROM_OUT"
-chmod 0644 "$PROM_OUT"
+chgrp nodeexp_txt "$PROM_TMP"
+chmod 0644 "$PROM_TMP"
+mv "$PROM_TMP" "$PROM_OUT"
 
 log "Annual promote completed"
 

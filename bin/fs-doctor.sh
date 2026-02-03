@@ -14,24 +14,24 @@ ORPHAN_METRIC="${NODEEXP_DIR}/fsbackup_orphans.prom"
 
 ORPHAN_LOG="/var/lib/fsbackup/log/fs-orphans.log"
 
-PRIMARY_SNAPSHOT_ROOT="/backup/snapshots"
-MIRROR_SNAPSHOT_ROOT="/backup2/snapshots"
+PRIMARY_ROOT="/backup/snapshots"
+MIRROR_ROOT="/backup2/snapshots"
 
 usage() {
-  echo "Usage: fs-doctor.sh --class <class> [--seed-hostkeys]"
+  echo "Usage: fs-doctor.sh --class <class>"
+  exit 2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --class) CLASS="$2"; shift 2 ;;
-    --seed-hostkeys) SEED_HOSTKEYS=1; shift ;;
-    *) usage; exit 2 ;;
+    *) usage ;;
   esac
 done
 
-[[ -n "$CLASS" ]] || { echo "Missing --class"; exit 2; }
+[[ -n "$CLASS" ]] || usage
 
-for cmd in yq jq ssh rsync ssh-keyscan; do
+for cmd in yq jq ssh rsync; do
   command -v "$cmd" >/dev/null || { echo "$cmd not found"; exit 2; }
 done
 
@@ -39,89 +39,49 @@ mapfile -t TARGETS < <(
   yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE" | jq -c .
 )
 
-is_local_host() {
-  local h="$1"
-  local short fqdn
-  short="$(hostname -s)"
-  fqdn="$(hostname -f 2>/dev/null || true)"
-
-  [[ "$h" == "localhost" || "$h" == "$short" || "$h" == "$fqdn" ]] && return 0
-
-  if getent hosts "$h" >/dev/null 2>&1; then
-    for ip in $(getent hosts "$h" | awk '{print $1}'); do
-      hostname -I | grep -qw "$ip" && return 0
-    done
-  fi
-  return 1
-}
-
-SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5)
-
-TOTAL="${#TARGETS[@]}"
+# -----------------------------------------------------------------------------
+# Target reachability checks (unchanged)
+# -----------------------------------------------------------------------------
 PASS=0
 FAIL=0
 
 echo
 echo "fsbackup doctor"
 echo "  Class:  $CLASS"
-echo "  Items:  $TOTAL"
+echo "  Items:  ${#TARGETS[@]}"
 echo
 
 printf "%-28s %-6s %s\n" "TARGET" "STAT" "DETAIL"
 printf "%-28s %-6s %s\n" "----------------------------" "------" "------------------------------"
 
+is_local_host() {
+  local h="$1"
+  [[ "$h" == "$(hostname -s)" || "$h" == "$(hostname -f 2>/dev/null)" || "$h" == "localhost" ]]
+}
+
 for t in "${TARGETS[@]}"; do
   id="$(jq -r '.id' <<<"$t")"
   host="$(jq -r '.host' <<<"$t")"
   src="$(jq -r '.source' <<<"$t")"
-  rsync_opts="$(jq -r '.rsync_opts // empty' <<<"$t")" # currently unused, but fine to keep
 
   if is_local_host "$host"; then
-    if [[ -e "$src" ]]; then
-      printf "%-28s %-6s %s\n" "$id" "OK" "local path exists"
-      PASS=$((PASS + 1))
-    else
-      printf "%-28s %-6s %s\n" "$id" "FAIL" "local missing: $src"
-      FAIL=$((FAIL + 1))
-    fi
-    continue
+    [[ -e "$src" ]] && { printf "%-28s OK     local path exists\n" "$id"; ((PASS++)); } \
+                     || { printf "%-28s FAIL   local missing\n" "$id"; ((FAIL++)); }
+  else
+    ssh -o BatchMode=yes "${BACKUP_SSH_USER}@${host}" "test -e '$src'" >/dev/null 2>&1 \
+      && { printf "%-28s OK     ssh+path OK\n" "$id"; ((PASS++)); } \
+      || { printf "%-28s FAIL   remote missing\n" "$id"; ((FAIL++)); }
   fi
-
-  if ! ssh "${SSH_OPTS[@]}" "${BACKUP_SSH_USER}@${host}" "test -e '$src'" >/dev/null 2>&1; then
-    printf "%-28s %-6s %s\n" "$id" "FAIL" "remote missing: ${host}:${src}"
-    FAIL=$((FAIL + 1))
-    continue
-  fi
-
-  printf "%-28s %-6s %s\n" "$id" "OK" "ssh+path OK"
-  PASS=$((PASS + 1))
 done
 
 echo
 echo "Doctor summary"
-echo "  Total: $TOTAL"
 echo "  OK:    $PASS"
 echo "  FAIL:  $FAIL"
 echo
 
 # -----------------------------------------------------------------------------
-# Node exporter health
-# -----------------------------------------------------------------------------
-nodeexp_ok=0
-if [[ -d "$NODEEXP_DIR" && -w "$NODEEXP_DIR" && -x "$NODEEXP_DIR" ]]; then
-  nodeexp_ok=1
-fi
-
-tmp="$(mktemp)"
-cat >"$tmp" <<EOF
-fsbackup_node_exporter_textfile_access ${nodeexp_ok}
-EOF
-chmod 0644 "$tmp" 2>/dev/null || true
-chgrp nodeexp_txt "$tmp" 2>/dev/null || true
-mv "$tmp" "$NODEEXP_METRIC" 2>/dev/null || rm -f "$tmp"
-
-# -----------------------------------------------------------------------------
-# Orphan detection (PRIMARY + MIRROR)
+# Orphan detection (PRIMARY + MIRROR, all tiers)
 # -----------------------------------------------------------------------------
 mkdir -p "$(dirname "$ORPHAN_LOG")"
 
@@ -130,79 +90,69 @@ mapfile -t VALID_IDS < <(
 )
 
 declare -A VALID
-for vid in "${VALID_IDS[@]}"; do VALID["$vid"]=1; done
+for id in "${VALID_IDS[@]}"; do VALID["$id"]=1; done
 
 declare -A ORPHANS
-ORPHANS["primary"]=0
-ORPHANS["mirror"]=0
+for root in primary mirror; do
+  for tier in daily weekly monthly annual; do
+    ORPHANS["${root}_${tier}"]=0
+  done
+done
 
 scan_root() {
-  local root="$1"
-  local label="$2"
+  local root_label="$1"
+  local base="$2"
 
-  [[ -d "$root" ]] || return 0
+  [[ -d "$base" ]] || return
 
-  while IFS= read -r d; do
-    target="$(basename "$d")"
-    class="$(basename "$(dirname "$d")")"
-    date="$(basename "$(dirname "$(dirname "$d")")")"
-    tier="$(basename "$(dirname "$(dirname "$(dirname "$d")")")")"
+  for tier in daily weekly monthly annual; do
+    [[ -d "$base/$tier" ]] || continue
 
-    if [[ -z "${VALID[$target]+x}" ]]; then
-      ORPHANS["$label"]=$((ORPHANS["$label"] + 1))
-      echo "$(date -Is) root=${label} tier=${tier} date=${date} class=${class} orphan=${target}" >>"$ORPHAN_LOG"
-    fi
-  done < <(find "$root" -mindepth 4 -maxdepth 4 -type d)
+    find "$base/$tier" -mindepth 3 -maxdepth 3 -type d | while read -r d; do
+      target="$(basename "$d")"
+      class="$(basename "$(dirname "$d")")"
+      date="$(basename "$(dirname "$(dirname "$d")")")"
+
+      if [[ -z "${VALID[$target]+x}" ]]; then
+        ORPHANS["${root_label}_${tier}"]=$((ORPHANS["${root_label}_${tier}"] + 1))
+        echo "$(date -Is) root=${root_label} tier=${tier} date=${date} class=${class} orphan=${target}" >>"$ORPHAN_LOG"
+      fi
+    done
+  done
 }
 
+scan_root primary "$PRIMARY_ROOT"
+scan_root mirror  "$MIRROR_ROOT"
 
-scan_root "$PRIMARY_SNAPSHOT_ROOT" "primary"
-scan_root "$MIRROR_SNAPSHOT_ROOT" "mirror"
-
-# -----------------------------------------------------------------------------
-# Annual snapshot audit
-# -----------------------------------------------------------------------------
-PRIMARY_ANNUAL="/backup/snapshots/annual"
-MIRROR_ANNUAL="/backup2/snapshots/annual"
-
-annual_ok=1
-
-if [[ -d "$PRIMARY_ANNUAL" ]]; then
-  for y in "$PRIMARY_ANNUAL"/*; do
-    year="$(basename "$y")"
-    p="$PRIMARY_ANNUAL/$year/class1"
-    m="$MIRROR_ANNUAL/$year/class1"
-
-    [[ -d "$p" ]] || annual_ok=0
-    [[ -d "$m" ]] || annual_ok=0
-
-    [[ -d "$PRIMARY_ANNUAL/$year/class2" ]] && annual_ok=0
-
-    if [[ -d "$p" && -d "$m" ]]; then
-      pb="$(du -sb "$p" | awk '{print $1}')"
-      mb="$(du -sb "$m" | awk '{print $1}')"
-      [[ "$pb" == "$mb" ]] || annual_ok=0
-    fi
+tmp="$(mktemp)"
+{
+  echo "# HELP fsbackup_orphan_snapshots_total Orphan snapshot directories by root and tier"
+  echo "# TYPE fsbackup_orphan_snapshots_total gauge"
+  for k in "${!ORPHANS[@]}"; do
+    root="${k%%_*}"
+    tier="${k##*_}"
+    echo "fsbackup_orphan_snapshots_total{root=\"${root}\",tier=\"${tier}\"} ${ORPHANS[$k]}"
   done
-fi
+} >"$tmp"
+
+chgrp nodeexp_txt "$tmp"
+chmod 0644 "$tmp"
+mv "$tmp" "$ORPHAN_METRIC"
+
+# -----------------------------------------------------------------------------
+# Node exporter health
+# -----------------------------------------------------------------------------
+nodeexp_ok=0
+[[ -d "$NODEEXP_DIR" && -w "$NODEEXP_DIR" ]] && nodeexp_ok=1
 
 tmp="$(mktemp)"
 cat >"$tmp" <<EOF
-fsbackup_annual_snapshots_healthy ${annual_ok}
+fsbackup_node_exporter_textfile_access ${nodeexp_ok}
 EOF
 
 chgrp nodeexp_txt "$tmp"
 chmod 0644 "$tmp"
-mv "$tmp" "${NODEEXP_DIR}/fsbackup_annual_health.prom"
-
-tmp="$(mktemp)"
-cat >"$tmp" <<EOF
-fsbackup_orphan_snapshots_total{root="primary"} ${ORPHANS[primary]}
-fsbackup_orphan_snapshots_total{root="mirror"} ${ORPHANS[mirror]}
-EOF
-chgrp nodeexp_txt "$tmp" 2>/dev/null || true
-chmod 0644 "$tmp" 2>/dev/null || true
-mv "$tmp" "$ORPHAN_METRIC" 2>/dev/null || rm -f "$tmp"
+mv "$tmp" "$NODEEXP_METRIC"
 
 exit 0
 
