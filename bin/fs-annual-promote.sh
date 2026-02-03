@@ -16,8 +16,9 @@ NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
 PROM_TMP="$(mktemp)"
 PROM_OUT="${NODEEXP_DIR}/fsbackup_annual_promote.prom"
 
-DRY_RUN=0
 YEAR=""
+DRY_RUN=0
+NOW_EPOCH="$(date +%s)"
 
 usage() {
   echo "Usage: fs-annual-promote.sh --year <YYYY> [--dry-run]"
@@ -41,7 +42,14 @@ log() {
 
 SRC="${SNAPSHOT_ROOT}/monthly/${YEAR}-12/class1"
 DST="${SNAPSHOT_ROOT}/annual/${YEAR}/class1"
-NOW_EPOCH="$(date +%s)"
+
+unlock_annual() {
+  chmod -R u+w "${SNAPSHOT_ROOT}/annual" 2>/dev/null || true
+}
+
+lock_annual() {
+  chmod -R u-w "${SNAPSHOT_ROOT}/annual" 2>/dev/null || true
+}
 
 log "Starting annual promote"
 log "  Year:    ${YEAR}"
@@ -53,7 +61,7 @@ log "  Dry-run: ${DRY_RUN}"
 # Preconditions
 # -----------------------------------------------------------------------------
 if [[ ! -d "$SRC" ]]; then
-  log "INFO December monthly not found, skipping"
+  log "INFO December monthly snapshot not found, skipping"
 
   cat >"$PROM_TMP" <<EOF
 fsbackup_annual_promote_success{year="${YEAR}"} 0
@@ -86,6 +94,7 @@ fi
 # Promotion
 # -----------------------------------------------------------------------------
 mkdir -p "$(dirname "$DST")"
+unlock_annual
 
 RSYNC_CMD=(rsync -a --numeric-ids)
 [[ "$DRY_RUN" -eq 1 ]] && RSYNC_CMD+=(-n)
@@ -93,8 +102,9 @@ RSYNC_CMD=(rsync -a --numeric-ids)
 log "RUN rsync ${SRC} → ${DST}"
 "${RSYNC_CMD[@]}" "${SRC%/}/" "$DST/"
 
-BYTES="$(du -sb "$DST" 2>/dev/null | awk '{print $1}' || echo 0)"
+lock_annual
 
+BYTES="$(du -sb "$DST" 2>/dev/null | awk '{print $1}' || echo 0)"
 log "OK annual snapshot created (${BYTES} bytes)"
 
 # -----------------------------------------------------------------------------
@@ -111,6 +121,5 @@ chmod 0644 "$PROM_TMP"
 mv "$PROM_TMP" "$PROM_OUT"
 
 log "Annual promote completed"
-
 exit 0
 

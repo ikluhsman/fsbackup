@@ -6,16 +6,17 @@ CONFIG_FILE="/etc/fsbackup/targets.yml"
 BACKUP_SSH_USER="backup"
 
 CLASS=""
-SEED_HOSTKEYS=0
-
-NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
-NODEEXP_METRIC="${NODEEXP_DIR}/fsbackup_nodeexp_health.prom"
-ORPHAN_METRIC="${NODEEXP_DIR}/fsbackup_orphans.prom"
-
-ORPHAN_LOG="/var/lib/fsbackup/log/fs-orphans.log"
 
 PRIMARY_ROOT="/backup/snapshots"
 MIRROR_ROOT="/backup2/snapshots"
+
+LOG_DIR="/var/lib/fsbackup/log"
+ORPHAN_LOG="${LOG_DIR}/fs-orphans.log"
+
+NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
+ORPHAN_METRIC="${NODEEXP_DIR}/fsbackup_orphans.prom"
+ANNUAL_IMMUTABLE_METRIC="${NODEEXP_DIR}/fsbackup_annual_immutable.prom"
+NODEEXP_METRIC="${NODEEXP_DIR}/fsbackup_nodeexp_health.prom"
 
 usage() {
   echo "Usage: fs-doctor.sh --class <class>"
@@ -30,8 +31,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$CLASS" ]] || usage
+mkdir -p "$LOG_DIR"
 
-for cmd in yq jq ssh rsync; do
+for cmd in yq jq ssh; do
   command -v "$cmd" >/dev/null || { echo "$cmd not found"; exit 2; }
 done
 
@@ -40,7 +42,7 @@ mapfile -t TARGETS < <(
 )
 
 # -----------------------------------------------------------------------------
-# Target reachability checks (unchanged)
+# Target reachability checks
 # -----------------------------------------------------------------------------
 PASS=0
 FAIL=0
@@ -55,8 +57,7 @@ printf "%-28s %-6s %s\n" "TARGET" "STAT" "DETAIL"
 printf "%-28s %-6s %s\n" "----------------------------" "------" "------------------------------"
 
 is_local_host() {
-  local h="$1"
-  [[ "$h" == "$(hostname -s)" || "$h" == "$(hostname -f 2>/dev/null)" || "$h" == "localhost" ]]
+  [[ "$1" == "$(hostname -s)" || "$1" == "$(hostname -f 2>/dev/null)" || "$1" == "localhost" ]]
 }
 
 for t in "${TARGETS[@]}"; do
@@ -140,16 +141,35 @@ chmod 0644 "$tmp"
 mv "$tmp" "$ORPHAN_METRIC"
 
 # -----------------------------------------------------------------------------
+# Annual immutability audit
+# -----------------------------------------------------------------------------
+PRIMARY_ANNUAL="${PRIMARY_ROOT}/annual"
+MIRROR_ANNUAL="${MIRROR_ROOT}/annual"
+
+primary_ok=0
+mirror_ok=0
+
+[[ -d "$PRIMARY_ANNUAL" && ! -w "$PRIMARY_ANNUAL" ]] && primary_ok=1
+[[ -d "$MIRROR_ANNUAL"  && ! -w "$MIRROR_ANNUAL"  ]] && mirror_ok=1
+
+tmp="$(mktemp)"
+cat >"$tmp" <<EOF
+fsbackup_annual_immutable{root="primary"} ${primary_ok}
+fsbackup_annual_immutable{root="mirror"} ${mirror_ok}
+EOF
+
+chgrp nodeexp_txt "$tmp"
+chmod 0644 "$tmp"
+mv "$tmp" "$ANNUAL_IMMUTABLE_METRIC"
+
+# -----------------------------------------------------------------------------
 # Node exporter health
 # -----------------------------------------------------------------------------
 nodeexp_ok=0
 [[ -d "$NODEEXP_DIR" && -w "$NODEEXP_DIR" ]] && nodeexp_ok=1
 
 tmp="$(mktemp)"
-cat >"$tmp" <<EOF
-fsbackup_node_exporter_textfile_access ${nodeexp_ok}
-EOF
-
+echo "fsbackup_node_exporter_textfile_access ${nodeexp_ok}" >"$tmp"
 chgrp nodeexp_txt "$tmp"
 chmod 0644 "$tmp"
 mv "$tmp" "$NODEEXP_METRIC"
