@@ -74,22 +74,27 @@ for t in "${TARGETS[@]}"; do
   id="$(jq -r '.id' <<<"$t")"
   host="$(jq -r '.host' <<<"$t")"
   src="$(jq -r '.source' <<<"$t")"
-  rsync_opts="$(jq -r '.rsync_opts // empty' <<<"$t")"
+  rsync_opts="$(jq -r '.rsync_opts // empty' <<<"$t")" # currently unused, but fine to keep
 
   if is_local_host "$host"; then
-    [[ -e "$src" ]] && { printf "%-28s OK     local path exists\n" "$id"; ((PASS++)); } \
-                     || { printf "%-28s FAIL   local missing\n" "$id"; ((FAIL++)); }
+    if [[ -e "$src" ]]; then
+      printf "%-28s %-6s %s\n" "$id" "OK" "local path exists"
+      PASS=$((PASS + 1))
+    else
+      printf "%-28s %-6s %s\n" "$id" "FAIL" "local missing: $src"
+      FAIL=$((FAIL + 1))
+    fi
     continue
   fi
 
   if ! ssh "${SSH_OPTS[@]}" "${BACKUP_SSH_USER}@${host}" "test -e '$src'" >/dev/null 2>&1; then
-    printf "%-28s FAIL   remote missing\n" "$id"
-    ((FAIL++))
+    printf "%-28s %-6s %s\n" "$id" "FAIL" "remote missing: ${host}:${src}"
+    FAIL=$((FAIL + 1))
     continue
   fi
 
-  printf "%-28s OK     ssh+path OK\n" "$id"
-  ((PASS++))
+  printf "%-28s %-6s %s\n" "$id" "OK" "ssh+path OK"
+  PASS=$((PASS + 1))
 done
 
 echo
@@ -103,14 +108,16 @@ echo
 # Node exporter health
 # -----------------------------------------------------------------------------
 nodeexp_ok=0
-[[ -d "$NODEEXP_DIR" && -w "$NODEEXP_DIR" ]] && nodeexp_ok=1
+if [[ -d "$NODEEXP_DIR" && -w "$NODEEXP_DIR" && -x "$NODEEXP_DIR" ]]; then
+  nodeexp_ok=1
+fi
 
 tmp="$(mktemp)"
 cat >"$tmp" <<EOF
 fsbackup_node_exporter_textfile_access ${nodeexp_ok}
 EOF
-chmod 0644 "$tmp"
-chgrp nodeexp_txt "$tmp"
+chmod 0644 "$tmp" 2>/dev/null || true
+chgrp nodeexp_txt "$tmp" 2>/dev/null || true
 mv "$tmp" "$NODEEXP_METRIC" 2>/dev/null || rm -f "$tmp"
 
 # -----------------------------------------------------------------------------
@@ -123,7 +130,7 @@ mapfile -t VALID_IDS < <(
 )
 
 declare -A VALID
-for id in "${VALID_IDS[@]}"; do VALID["$id"]=1; done
+for vid in "${VALID_IDS[@]}"; do VALID["$vid"]=1; done
 
 declare -A ORPHANS
 ORPHANS["primary"]=0
@@ -135,17 +142,19 @@ scan_root() {
 
   [[ -d "$root" ]] || return 0
 
-  find "$root" -mindepth 3 -maxdepth 3 -type d | while read -r d; do
+  while IFS= read -r d; do
     target="$(basename "$d")"
     class="$(basename "$(dirname "$d")")"
     date="$(basename "$(dirname "$(dirname "$d")")")"
+    tier="$(basename "$(dirname "$(dirname "$(dirname "$d")")")")"
 
     if [[ -z "${VALID[$target]+x}" ]]; then
       ORPHANS["$label"]=$((ORPHANS["$label"] + 1))
-      echo "$(date -Is) root=${label} date=${date} class=${class} orphan=${target}" >>"$ORPHAN_LOG"
+      echo "$(date -Is) root=${label} tier=${tier} date=${date} class=${class} orphan=${target}" >>"$ORPHAN_LOG"
     fi
-  done
+  done < <(find "$root" -mindepth 4 -maxdepth 4 -type d)
 }
+
 
 scan_root "$PRIMARY_SNAPSHOT_ROOT" "primary"
 scan_root "$MIRROR_SNAPSHOT_ROOT" "mirror"
@@ -155,9 +164,9 @@ cat >"$tmp" <<EOF
 fsbackup_orphan_snapshots_total{root="primary"} ${ORPHANS[primary]}
 fsbackup_orphan_snapshots_total{root="mirror"} ${ORPHANS[mirror]}
 EOF
-chgrp nodeexp_txt "$tmp"
-chmod 0644 "$tmp"
-mv "$tmp" "$ORPHAN_METRIC"
+chgrp nodeexp_txt "$tmp" 2>/dev/null || true
+chmod 0644 "$tmp" 2>/dev/null || true
+mv "$tmp" "$ORPHAN_METRIC" 2>/dev/null || rm -f "$tmp"
 
 exit 0
 
