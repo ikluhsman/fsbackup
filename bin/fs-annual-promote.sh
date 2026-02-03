@@ -34,6 +34,10 @@ done
 [[ -n "$YEAR" ]] || usage
 mkdir -p "$LOG_DIR"
 
+if [[ -z "$YEAR" ]]; then
+  YEAR="$(date -d 'last year' +%Y)"
+fi
+
 log() {
   echo "$(date -Is) [annual] $*" | tee -a "$LOG_FILE"
 }
