@@ -3,7 +3,7 @@ set -u
 set -o pipefail
 
 # =============================================================================
-# fs-runner.sh — snapshot executor with merge-safe metrics
+# fs-runner.sh — deterministic snapshot executor (no metric duplication)
 # =============================================================================
 
 . /etc/fsbackup/fsbackup.conf
@@ -11,13 +11,12 @@ set -o pipefail
 CONFIG_FILE="/etc/fsbackup/targets.yml"
 LOG_DIR="/var/lib/fsbackup/log"
 LOG_FILE="${LOG_DIR}/backup.log"
-
 NODE_TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
 
 BACKUP_SSH_USER="backup"
 MAX_EXCLUDES=15
 
-SNAPSHOT_TYPE="$1"   # daily | weekly | monthly
+SNAPSHOT_TYPE="$1"
 shift || true
 
 CLASS=""
@@ -44,10 +43,9 @@ done
 mkdir -p "$LOG_DIR"
 
 PROM_FILE="${NODE_TEXTFILE_DIR}/fsbackup_runner_${CLASS}.prom"
-
+NOW_EPOCH="$(date +%s)"
 RUN_SCOPE_FULL=1
 [[ -n "$TARGET_FILTER" ]] && RUN_SCOPE_FULL=0
-NOW_EPOCH="$(date +%s)"
 
 log() {
   local id="$1"; shift
@@ -59,10 +57,6 @@ is_local_host() {
   [[ "$h" == "localhost" ]] && return 0
   [[ "$h" == "$(hostname -s)" ]] && return 0
   [[ "$h" == "$(hostname -f 2>/dev/null)" ]] && return 0
-
-  for ip in $(hostname -I 2>/dev/null); do
-    getent hosts "$h" | awk '{print $1}' | grep -qx "$ip" && return 0
-  done
   return 1
 }
 
@@ -72,8 +66,7 @@ is_local_host() {
 
 if [[ -n "$TARGET_FILTER" ]]; then
   mapfile -t TARGETS < <(
-    yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE" \
-    | jq -c "select(.id == \"${TARGET_FILTER}\")"
+    yq eval -o=json ".${CLASS}[]" "$CONFIG_FILE" | jq -c "select(.id == \"${TARGET_FILTER}\")"
   )
 else
   mapfile -t TARGETS < <(
@@ -81,8 +74,10 @@ else
   )
 fi
 
-[[ "${#TARGETS[@]}" -eq 0 ]] && { echo "Target not found: ${TARGET_FILTER}"; exit 2; }
-
+[[ "${#TARGETS[@]}" -eq 0 ]] && {
+  echo "No targets found."
+  exit 2
+}
 
 DATE_STR="$(date +%F)"
 DEST_BASE="${SNAPSHOT_ROOT}/${SNAPSHOT_TYPE}/${DATE_STR}/${CLASS}"
@@ -94,43 +89,42 @@ echo "  Target filter: ${TARGET_FILTER:-<none>}"
 echo
 
 # -----------------------------------------------------------------------------
-# PREFLIGHT
+# Load existing failure counters
 # -----------------------------------------------------------------------------
-for t in "${TARGETS[@]}"; do
-  id="$(jq -r '.id' <<<"$t")"
-  host="$(jq -r '.host' <<<"$t")"
-  src="$(jq -r '.source' <<<"$t")"
 
-  if is_local_host "$host"; then
-    [[ -e "$src" ]] || { echo "→ $id FAIL (missing)"; exit 1; }
-  else
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-      "${BACKUP_SSH_USER}@${host}" "test -e '$src'" \
-      || { echo "→ $id FAIL (ssh/path)"; exit 1; }
-  fi
-done
+declare -A FAILURE_COUNTERS
+
+if [[ -f "$PROM_FILE" ]]; then
+  while read -r line; do
+    if [[ "$line" =~ fsbackup_runner_target_failures_total ]]; then
+      target=$(echo "$line" | sed -n 's/.*target="\([^"]*\)".*/\1/p')
+      value=$(echo "$line" | awk '{print $NF}')
+      FAILURE_COUNTERS["$target"]="$value"
+    fi
+  done < "$PROM_FILE"
+fi
 
 # -----------------------------------------------------------------------------
-# EXECUTION
+# Execution
 # -----------------------------------------------------------------------------
+
 TOTAL=0
 SUCCEEDED=0
 FAILED=0
 
-PROM_NEW="$(mktemp)"
+PROM_TMP="$(mktemp)"
 
 for t in "${TARGETS[@]}"; do
   ((TOTAL++))
+
   id="$(jq -r '.id' <<<"$t")"
   host="$(jq -r '.host' <<<"$t")"
   src="$(jq -r '.source' <<<"$t")"
   rsync_opts="$(jq -r '.rsync_opts // empty' <<<"$t")"
 
   DEST="${DEST_BASE}/${id}"
-  EXCLUDE_FILE="$(mktemp)"
-  RSYNC_ERR="$(mktemp)"
-
   mkdir -p "$DEST"
+
   log "$id" "Starting snapshot"
 
   RSYNC_CMD=(rsync -a --delete)
@@ -138,24 +132,11 @@ for t in "${TARGETS[@]}"; do
   [[ "$REPLACE" -eq 0 ]] && RSYNC_CMD+=(--ignore-existing)
   [[ -n "$rsync_opts" ]] && RSYNC_CMD+=($rsync_opts)
 
-  TOTAL_EXCLUDES=0
-  AUTO_EXCLUDE_USED=0
-
-  while true; do
-    if is_local_host "$host"; then
-      "${RSYNC_CMD[@]}" --exclude-from="$EXCLUDE_FILE" "${src%/}/" "$DEST/" 2>"$RSYNC_ERR" && break
-    else
-      "${RSYNC_CMD[@]}" --exclude-from="$EXCLUDE_FILE" "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/" 2>"$RSYNC_ERR" && break
-    fi
-
-    err_path="$(grep -oE '/[^"]+' "$RSYNC_ERR" | head -n1)"
-    [[ -z "$err_path" ]] && break
-
-    ((TOTAL_EXCLUDES++))
-    (( TOTAL_EXCLUDES > MAX_EXCLUDES )) && break
-    echo "${err_path}/**" >>"$EXCLUDE_FILE"
-    AUTO_EXCLUDE_USED=1
-  done
+  if is_local_host "$host"; then
+    "${RSYNC_CMD[@]}" "${src%/}/" "$DEST/"
+  else
+    "${RSYNC_CMD[@]}" "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/"
+  fi
 
   rc=$?
 
@@ -163,80 +144,65 @@ for t in "${TARGETS[@]}"; do
     ((SUCCEEDED++))
     SNAP_BYTES="$(du -sb "$DEST" 2>/dev/null | awk '{print $1}' || echo 0)"
 
-    cat >>"$PROM_NEW" <<EOF
+    cat >>"$PROM_TMP" <<EOF
 fsbackup_snapshot_last_success{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_snapshot_bytes{class="${CLASS}",target="${id}"} ${SNAP_BYTES}
-fsbackup_excludes_total{class="${CLASS}",target="${id}"} ${TOTAL_EXCLUDES}
-fsbackup_auto_exclude_used{class="${CLASS}",target="${id}"} ${AUTO_EXCLUDE_USED}
 fsbackup_runner_target_last_seen{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_runner_target_last_exit_code{class="${CLASS}",target="${id}"} 0
 EOF
+
+    FAILURE_COUNTERS["$id"]="${FAILURE_COUNTERS["$id"]:-0}"
+
   else
     ((FAILED++))
-    cat >>"$PROM_NEW" <<EOF
+    FAILURE_COUNTERS["$id"]=$(( ${FAILURE_COUNTERS["$id"]:-0} + 1 ))
+
+    cat >>"$PROM_TMP" <<EOF
+fsbackup_snapshot_last_failure{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_runner_target_last_seen{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_runner_target_last_exit_code{class="${CLASS}",target="${id}"} ${rc}
-fsbackup_runner_target_failures_total{class="${CLASS}",target="${id}"} 1
 EOF
   fi
 
-  rm -f "$RSYNC_ERR" "$EXCLUDE_FILE"
 done
 
 # -----------------------------------------------------------------------------
-# METRIC MERGE (correct, counter-safe)
+# Emit monotonic failure counters
 # -----------------------------------------------------------------------------
-PROM_MERGED="$(mktemp)"
 
-# 1. Start with existing metrics (if any)
-if [[ -f "$PROM_FILE" ]]; then
-  cat "$PROM_FILE" >"$PROM_MERGED"
-fi
-
-# 2. Remove all metrics for targets we just processed
-for t in "${TARGETS[@]}"; do
-  id="$(jq -r '.id' <<<"$t")"
-  sed -i "/target=\"${id}\"/d" "$PROM_MERGED"
+for target in "${!FAILURE_COUNTERS[@]}"; do
+  echo "fsbackup_runner_target_failures_total{class=\"${CLASS}\",target=\"${target}\"} ${FAILURE_COUNTERS[$target]}" >>"$PROM_TMP"
 done
 
-# 3. Merge failure counters (monotonic)
-awk '
-/fsbackup_runner_target_failures_total/ {
-  key=$0
-  sub(/[0-9]+$/, "", key)
-  count[key] += $NF
-  next
-}
-{ print }
-END {
-  for (k in count) print k count[k]
-}
-' "$PROM_MERGED" "$PROM_NEW" >"${PROM_MERGED}.new"
+# -----------------------------------------------------------------------------
+# Class-level metrics
+# -----------------------------------------------------------------------------
 
-mv "${PROM_MERGED}.new" "$PROM_MERGED"
-
-# 4. Append new metrics (snapshots + last_seen + exit_code)
-cat "$PROM_NEW" >>"$PROM_MERGED"
-
-# 5. Class-level metrics ONLY on full runs
 if [[ "$RUN_SCOPE_FULL" -eq 1 ]]; then
-  cat >>"$PROM_MERGED" <<EOF
+  cat >>"$PROM_TMP" <<EOF
 fsbackup_runner_success{class="${CLASS}"} ${SUCCEEDED}
 fsbackup_runner_failed{class="${CLASS}"} ${FAILED}
 fsbackup_runner_last_exit_code{class="${CLASS}"} $([[ "$FAILED" -gt 0 ]] && echo 1 || echo 0)
 EOF
 fi
 
-# 6. Always emit run scope
-cat >>"$PROM_MERGED" <<EOF
-fsbackup_runner_run_scope{class="${CLASS}"} ${RUN_SCOPE_FULL}
-EOF
+echo "fsbackup_runner_run_scope{class=\"${CLASS}\"} ${RUN_SCOPE_FULL}" >>"$PROM_TMP"
 
-chgrp nodeexp_txt "$PROM_MERGED"
-chmod 0640 "$PROM_MERGED"
-mv "$PROM_MERGED" "$PROM_FILE"
+# -----------------------------------------------------------------------------
+# Write atomically
+# -----------------------------------------------------------------------------
 
-rm -f "$PROM_NEW"
+chgrp nodeexp_txt "$PROM_TMP"
+chmod 0640 "$PROM_TMP"
+mv "$PROM_TMP" "$PROM_FILE"
+
+# -----------------------------------------------------------------------------
+# Class exit marker
+# -----------------------------------------------------------------------------
+
+mkdir -p "$DEST_BASE"
+CLASS_EXIT=$([[ "$FAILED" -gt 0 ]] && echo 1 || echo 0)
+echo "$CLASS_EXIT" > "${DEST_BASE}/.fsbackup_class_exit_code"
 
 exit 0
 
