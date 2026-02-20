@@ -53,7 +53,7 @@ class1:
 
   - id: prometheus.data
     host: denhpsvr1
-    source: /docker/volumes/prometheus_data/snapshots/current_snapshot
+    source: /docker/volumes/prometheus_data/_data/prometheus_data/snapshots/current_snapshot
     type: dir
 
   - id: registry.data
