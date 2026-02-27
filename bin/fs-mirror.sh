@@ -74,9 +74,24 @@ log "Beginning mirror run"
 log "  SRC_ROOT: $SRC_ROOT"
 log "  DST_ROOT: $DST_ROOT"
 
+MIRROR_SKIP_CLASSES="${MIRROR_SKIP_CLASSES:-}"
+
 case "$MODE" in
   daily)
-    for cls in class1 class2; do
+    mapfile -t CLASSES < <(
+      find "${SRC_ROOT}/daily/${DATE_STR}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort || true
+    )
+
+    if [[ "${#CLASSES[@]}" -eq 0 ]]; then
+      log "WARN no class directories found in ${SRC_ROOT}/daily/${DATE_STR}"
+    fi
+
+    for cls in "${CLASSES[@]}"; do
+      if [[ -n "$MIRROR_SKIP_CLASSES" && " $MIRROR_SKIP_CLASSES " == *" $cls "* ]]; then
+        log "SKIP class=${cls} (in MIRROR_SKIP_CLASSES)"
+        continue
+      fi
+
       SRC="${SRC_ROOT}/daily/${DATE_STR}/${cls}"
       DST="${DST_ROOT}/daily/${DATE_STR}/${cls}"
 

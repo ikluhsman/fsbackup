@@ -21,7 +21,8 @@ DRY_RUN=0
 NOW_EPOCH="$(date +%s)"
 
 usage() {
-  echo "Usage: fs-annual-promote.sh --year <YYYY> [--dry-run]"
+  echo "Usage: fs-annual-promote.sh [--year <YYYY>] [--dry-run]"
+  echo "  --year defaults to the previous calendar year when not specified"
   exit 2
 }
 
@@ -33,7 +34,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$YEAR" ]] || usage
+# Default to previous calendar year — timer fires January 5th, targeting December N-1
+if [[ -z "$YEAR" ]]; then
+  YEAR="$(( $(date +%Y) - 1 ))"
+fi
 mkdir -p "$LOG_DIR"
 
 log() {
