@@ -96,12 +96,12 @@
                         "0": {
                           "color": "red",
                           "index": 1,
-                          "text": "❌"
+                          "text": "\u274c"
                         },
                         "1": {
                           "color": "green",
                           "index": 0,
-                          "text": "✔️"
+                          "text": "\u2714\ufe0f"
                         }
                       },
                       "type": "value"
@@ -1750,11 +1750,11 @@
                       "options": {
                         "0": {
                           "index": 1,
-                          "text": "⚠️"
+                          "text": "\u26a0\ufe0f"
                         },
                         "1": {
                           "index": 0,
-                          "text": "🔒"
+                          "text": "\ud83d\udd12"
                         }
                       },
                       "type": "value"
@@ -2251,19 +2251,19 @@
                       "options": {
                         "0": {
                           "index": 0,
-                          "text": "✔️"
+                          "text": "\u2714\ufe0f"
                         },
                         "1": {
                           "index": 1,
-                          "text": "⚠️"
+                          "text": "\u26a0\ufe0f"
                         },
                         "23": {
                           "index": 2,
-                          "text": "⚠️🔐"
+                          "text": "\u26a0\ufe0f\ud83d\udd10"
                         },
                         "24": {
                           "index": 3,
-                          "text": "⚠️👻"
+                          "text": "\u26a0\ufe0f\ud83d\udc7b"
                         }
                       },
                       "type": "value"
@@ -2416,19 +2416,19 @@
                       "options": {
                         "0": {
                           "index": 0,
-                          "text": "✔️"
+                          "text": "\u2714\ufe0f"
                         },
                         "1": {
                           "index": 1,
-                          "text": "⚠️"
+                          "text": "\u26a0\ufe0f"
                         },
                         "23": {
                           "index": 2,
-                          "text": "⚠️🔐"
+                          "text": "\u26a0\ufe0f\ud83d\udd10"
                         },
                         "24": {
                           "index": 3,
-                          "text": "⚠️👻"
+                          "text": "\u26a0\ufe0f\ud83d\udc7b"
                         }
                       },
                       "type": "value"
@@ -2581,11 +2581,11 @@
                       "options": {
                         "0": {
                           "index": 1,
-                          "text": "⚠️"
+                          "text": "\u26a0\ufe0f"
                         },
                         "1": {
                           "index": 0,
-                          "text": "✔️"
+                          "text": "\u2714\ufe0f"
                         }
                       },
                       "type": "value"
@@ -2689,11 +2689,11 @@
                       "options": {
                         "0": {
                           "index": 0,
-                          "text": "✔️"
+                          "text": "\u2714\ufe0f"
                         },
                         "1": {
                           "index": 1,
-                          "text": "⚠️"
+                          "text": "\u26a0\ufe0f"
                         }
                       },
                       "type": "value"
@@ -2879,12 +2879,12 @@
                         "0": {
                           "color": "green",
                           "index": 1,
-                          "text": "✔️"
+                          "text": "\u2714\ufe0f"
                         },
                         "1": {
                           "color": "red",
                           "index": 0,
-                          "text": "❌"
+                          "text": "\u274c"
                         }
                       },
                       "type": "value"
@@ -3174,6 +3174,550 @@
                   {
                     "desc": true,
                     "displayName": "{__name__=\"fs_db_export_size_bytes\", db=\"phpipam\", engine=\"mariadb\", exporter=\"Node\", host=\"denhpsvr2\", instance=\"denhpsvr2.kluhsman.com:9100\", job=\"node_exporter\"}"
+                  }
+                ]
+              }
+            },
+            "version": "12.3.1"
+          }
+        }
+      },
+      "panel-40": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "fsbackup_snapshot_bytes{class=\"class3\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "__auto",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "filterFieldsByName",
+                  "spec": {
+                    "id": "filterFieldsByName",
+                    "options": {
+                      "include": {
+                        "names": [
+                          "Value",
+                          "target"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "sortBy",
+                  "spec": {
+                    "id": "sortBy",
+                    "options": {
+                      "fields": {},
+                      "sort": [
+                        {
+                          "field": "target"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "",
+          "id": 40,
+          "links": [],
+          "title": "Class 3 Snapshot Sizes",
+          "vizConfig": {
+            "group": "barchart",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisGridShow": true,
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "fillOpacity": 60,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "lineWidth": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "fieldMinMax": false,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "unit": "decbytes"
+                },
+                "overrides": []
+              },
+              "options": {
+                "barRadius": 0.25,
+                "barWidth": 1,
+                "fullHighlight": true,
+                "groupWidth": 0.7,
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": false
+                },
+                "orientation": "horizontal",
+                "showValue": "always",
+                "stacking": "none",
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                },
+                "xTickLabelRotation": 0,
+                "xTickLabelSpacing": 100
+              }
+            },
+            "version": "12.3.1"
+          }
+        }
+      },
+      "panel-41": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "fsbackup_snapshot_last_success{class=\"class3\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "__auto",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "fsbackup_runner_target_last_seen{class=\"class3\"}",
+                        "instant": false,
+                        "legendFormat": "__auto",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "joinByField",
+                  "spec": {
+                    "id": "joinByField",
+                    "options": {
+                      "byField": "target",
+                      "mode": "outer"
+                    }
+                  }
+                },
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "id": "organize",
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "Value": false,
+                        "__name__": true,
+                        "class": true,
+                        "exporter": true,
+                        "instance": true,
+                        "job": true,
+                        "target": false
+                      },
+                      "includeByName": {},
+                      "indexByName": {},
+                      "renameByName": {
+                        "Value": "",
+                        "class": "Class",
+                        "target": "Target"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "calculateField",
+                  "spec": {
+                    "id": "calculateField",
+                    "options": {
+                      "alias": "Last Success",
+                      "binary": {
+                        "left": {
+                          "matcher": {
+                            "id": "byName",
+                            "options": "Value"
+                          }
+                        },
+                        "operator": "*",
+                        "right": {
+                          "fixed": "1000"
+                        }
+                      },
+                      "mode": "binary",
+                      "reduce": {
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "calculateField",
+                  "spec": {
+                    "id": "calculateField",
+                    "options": {
+                      "alias": "Last Seen",
+                      "binary": {
+                        "left": {
+                          "matcher": {
+                            "id": "byName",
+                            "options": "Value"
+                          }
+                        },
+                        "operator": "*",
+                        "right": {
+                          "fixed": "1000"
+                        }
+                      },
+                      "mode": "binary",
+                      "reduce": {
+                        "reducer": "sum"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "filterFieldsByName",
+                  "spec": {
+                    "id": "filterFieldsByName",
+                    "options": {
+                      "include": {
+                        "names": [
+                          "Target",
+                          "Last Success",
+                          "Last Seen"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "sortBy",
+                  "spec": {
+                    "id": "sortBy",
+                    "options": {
+                      "fields": {},
+                      "sort": [
+                        {
+                          "field": "Target"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "",
+          "id": 41,
+          "links": [],
+          "title": "Class 3 Snapshot Last Success",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  "unit": "dateTimeAsSystem"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Target"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 147
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "cellHeight": "sm",
+                "enablePagination": false,
+                "showHeader": true,
+                "sortBy": []
+              }
+            },
+            "version": "12.3.1"
+          }
+        }
+      },
+      "panel-42": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "fsbackup_runner_target_last_exit_code{class=\"class3\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{target}}",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {
+                "interval": "24h",
+                "maxDataPoints": 1,
+                "timeFrom": "24h"
+              },
+              "transformations": [
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "id": "organize",
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true,
+                        "class": true,
+                        "exporter": true,
+                        "instance": true,
+                        "job": true,
+                        "target": false
+                      },
+                      "includeByName": {},
+                      "indexByName": {
+                        "Time": 0,
+                        "Value": 6,
+                        "__name__": 1,
+                        "class": 2,
+                        "exporter": 3,
+                        "instance": 4,
+                        "job": 5,
+                        "target": 7
+                      },
+                      "renameByName": {
+                        "Value": "Status",
+                        "target": "Target"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "",
+          "id": 42,
+          "links": [],
+          "title": "Class 3 Snapshot Last Status",
+          "vizConfig": {
+            "group": "table",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false,
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  },
+                  "mappings": [
+                    {
+                      "options": {
+                        "0": {
+                          "index": 0,
+                          "text": "\u2714\ufe0f"
+                        },
+                        "1": {
+                          "index": 1,
+                          "text": "\u26a0\ufe0f"
+                        },
+                        "23": {
+                          "index": 2,
+                          "text": "\u26a0\ufe0f\ud83d\udd10"
+                        },
+                        "24": {
+                          "index": 3,
+                          "text": "\u26a0\ufe0f\ud83d\udc7b"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Status"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 75
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "cellHeight": "sm",
+                "enablePagination": false,
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "desc": false,
+                    "displayName": "Target"
                   }
                 ]
               }
