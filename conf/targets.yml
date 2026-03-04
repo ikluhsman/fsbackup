@@ -199,14 +199,6 @@ class2:
     type: dir
     rsync_opts: "--no-owner --no-group --no-perms --omit-dir-times"
 
-  - id: ns1.webmin.state
-    host: ns1
-    source: /var/webmin
-    type: dir
-    rsync_opts:
-      "--no-owner --no-group --no-perms --omit-dir-times --exclude=webmin.log
-      --exclude=miniserv.log --exclude=modules/authentic-theme/ --exclude=blocked"
-
   # =================
   # ns2
   # =================
@@ -222,14 +214,6 @@ class2:
     source: /etc/webmin
     type: dir
     rsync_opts: "--no-owner --no-group --no-perms --omit-dir-times"
-
-  - id: ns2.webmin.state
-    host: ns2
-    source: /var/webmin
-    type: dir
-    rsync_opts:
-      "--no-owner --no-group --no-perms --omit-dir-times --exclude=webmin.log
-      --exclude=modules/authentic-theme/ --exclude=blocked"
 
   # =============
   # rp
@@ -251,7 +235,7 @@ class2:
     host: denhpsvr1
     source: /docker/volumes/nginx_data
     type: dir
-    rsync_opts: "--exclude=_data/nginx/modules"
+    rsync_opts: "--exclude=_data/nginx/modules --exclude=_data/certbot"
 
   # =============
   # denhpsvr2
