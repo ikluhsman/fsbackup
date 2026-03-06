@@ -8,6 +8,9 @@ id_rsa*
 *.key
 !*.pub
 
+# Local targets — keep out of version control, use conf/targets.yml.example
+conf/targets.yml
+
 # Editor and OS noise
 .DS_Store
 *.swp

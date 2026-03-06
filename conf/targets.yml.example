@@ -1,0 +1,146 @@
+# =============================================================================
+# fsbackup targets — example configuration
+#
+# Copy to /etc/fsbackup/targets.yml and edit for your environment.
+#
+# Target fields:
+#   id          - Unique identifier; becomes the snapshot directory name.
+#                 Use dot notation: host.service.data
+#   host        - Source hostname (SSH alias) or "fs" for the local backup server
+#   source      - Absolute path on the source host
+#   type        - Always "dir" (default, kept for forward compatibility)
+#   rsync_opts  - Optional extra rsync flags. Excludes are relative to source,
+#                 not the remote root.
+# =============================================================================
+
+class1:
+  # class1: frequently changing data — backed up daily, mirrored to /backup2
+  # Tiers: daily (14), weekly (8), monthly (12), annual (class1 only, Dec→Jan 5)
+
+  # =============
+  # local (backup server)
+  # =============
+
+  - id: myapp.data
+    host: fs
+    source: /srv/myapp/data
+    type: dir
+
+  - id: myapp.db
+    host: fs
+    source: /backup/exports/myapp
+    type: dir
+
+  - id: fsbackup.config
+    host: fs
+    source: /etc/fsbackup
+    type: dir
+
+  # =============
+  # appserver (remote)
+  # =============
+
+  - id: appserver.appdata
+    host: appserver
+    source: /docker/volumes/myapp_data
+
+  - id: appserver.metrics.data
+    host: appserver
+    source: /docker/volumes/prometheus_data/_data/snapshots/current_snapshot
+    type: dir
+
+  # =============
+  # nas (remote)
+  # =============
+
+  - id: nas.important.files
+    host: nas
+    source: /share/important
+    type: dir
+    rsync_opts: "--exclude=tmp/ --exclude=cache/"
+
+
+class2:
+  # class2: infrastructure config — backed up daily, mirrored to /backup2
+  # Tiers: daily (14), weekly (8), monthly (12)
+
+  # =============
+  # local (backup server)
+  # =============
+
+  - id: apache.config
+    host: fs
+    source: /etc/apache2
+    type: dir
+
+  - id: docker.stacks.fs
+    host: fs
+    source: /docker/stacks
+    type: dir
+    rsync_opts: "--no-perms --no-owner --no-group"
+
+  # =============
+  # appserver (remote)
+  # =============
+
+  - id: docker.stacks.appserver
+    host: appserver
+    source: /docker/stacks
+
+  - id: nginx.data
+    host: appserver
+    source: /docker/volumes/nginx_data
+    type: dir
+    rsync_opts: "--exclude=_data/nginx/modules --exclude=_data/certbot"
+
+  # =============
+  # proxy (remote)
+  # =============
+
+  - id: proxy.nginx.config
+    host: proxy
+    source: /etc/nginx
+
+  # =============
+  # dns1 (remote)
+  # =============
+
+  - id: dns1.bind.named.conf
+    host: dns1
+    source: /etc/bind
+    type: dir
+    rsync_opts: "--exclude=rndc.conf"
+
+  - id: dns1.bind.zones
+    host: dns1
+    source: /etc/bind/zones
+
+  # =============
+  # vpn (remote)
+  # =============
+
+  - id: vpn.config
+    host: vpn
+    source: /etc/vpn
+    type: dir
+    rsync_opts: "--no-owner --no-group --no-perms --omit-dir-times"
+
+
+class3:
+  # class3: large archives — monthly snapshots only
+  # NOT mirrored to /backup2 (see MIRROR_SKIP_CLASSES in fsbackup.conf)
+  # Offsite: M-DISC annually, USB external monthly (manual)
+
+  # =============
+  # local (backup server)
+  # =============
+
+  - id: pictures.photos
+    host: fs
+    source: /share/pictures/photos
+    type: dir
+
+  - id: pictures.raw
+    host: fs
+    source: /share/pictures/raw
+    type: dir
