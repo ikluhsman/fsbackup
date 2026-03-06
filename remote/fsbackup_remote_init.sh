@@ -33,8 +33,7 @@ BACKUP_HOME="/var/lib/fsbackup-src"
 BACKUP_SHELL="/bin/bash"
 
 PUBKEY_FILE=""
-PUBKEY_TEXT="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJwT7RbHgoeGRTQfF/bbdtJJ6+WBfteTH5jYTzZUUcc"
-PUBKEY_EXPLICIT=0
+PUBKEY_TEXT=""
 
 ALLOW_PATHS=()
 
@@ -71,7 +70,7 @@ while [[ $# -gt 0 ]]; do
     --backup-user) BACKUP_USER="$2"; shift 2;;
     --backup-home) BACKUP_HOME="$2"; shift 2;;
     --pubkey-file) PUBKEY_FILE="$2"; shift 2;;
-    --pubkey) PUBKEY_TEXT="$2"; PUBKEY_EXPLICIT=1; shift 2;;
+    --pubkey) PUBKEY_TEXT="$2"; shift 2;;
     --allow-path) ALLOW_PATHS+=("$2"); shift 2;;
     --skip-textfile) SKIP_TEXTFILE=1; shift;;
     -h|--help) usage; exit 0;;
@@ -82,11 +81,11 @@ done
 if [[ -n "$PUBKEY_FILE" ]]; then
   [[ -f "$PUBKEY_FILE" ]] || { echo "ERROR: pubkey file not found: $PUBKEY_FILE" >&2; exit 2; }
   PUBKEY_TEXT="$(cat "$PUBKEY_FILE")"
-  PUBKEY_EXPLICIT=1
 fi
 
-if [[ "$PUBKEY_EXPLICIT" -eq 0 ]]; then
-  echo "WARN: no --pubkey-file or --pubkey provided — using hardcoded default key" >&2
+if [[ -z "$PUBKEY_TEXT" ]]; then
+  echo "ERROR: --pubkey-file or --pubkey is required" >&2
+  exit 2
 fi
 
 command -v setfacl >/dev/null || { echo "ERROR: setfacl not installed"; exit 2; }
