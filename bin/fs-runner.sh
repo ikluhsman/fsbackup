@@ -60,6 +60,15 @@ is_local_host() {
   return 1
 }
 
+# Extract a numeric value from rsync --stats output by label prefix.
+# Returns 0 if the label is not found (e.g. no files deleted).
+_rsync_stat() {
+  local label="$1" stats_file="$2"
+  local raw
+  raw=$(grep -m1 "^${label}" "$stats_file" 2>/dev/null) || { echo 0; return; }
+  echo "$raw" | grep -oP '[\d,]+' | head -1 | tr -d ',' || echo 0
+}
+
 # -----------------------------------------------------------------------------
 # Load targets
 # -----------------------------------------------------------------------------
@@ -132,26 +141,35 @@ for t in "${TARGETS[@]}"; do
 
   log "$id" "Starting snapshot"
 
-  RSYNC_CMD=(rsync -a --delete)
+  RSYNC_CMD=(rsync -a --delete --stats)
   [[ "$DRY_RUN" -eq 1 ]] && RSYNC_CMD+=(-n)
   [[ "$REPLACE" -eq 0 ]] && RSYNC_CMD+=(--ignore-existing)
   [[ -n "$rsync_opts" ]] && RSYNC_CMD+=($rsync_opts)
 
+  RSYNC_STATS_TMP="$(mktemp)"
   if is_local_host "$host"; then
-    "${RSYNC_CMD[@]}" "${src%/}/" "$DEST/"
+    "${RSYNC_CMD[@]}" "${src%/}/" "$DEST/" | tee "$RSYNC_STATS_TMP"
   else
-    "${RSYNC_CMD[@]}" "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/"
+    "${RSYNC_CMD[@]}" "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/" | tee "$RSYNC_STATS_TMP"
   fi
-
-  rc=$?
+  rc=${PIPESTATUS[0]}
 
   if [[ $rc -eq 0 ]]; then
     ((SUCCEEDED++))
     SNAP_BYTES="$(du -sb "$DEST" 2>/dev/null | awk '{print $1}' || echo 0)"
 
+    STAT_FILES_TOTAL="$(_rsync_stat "Number of files:" "$RSYNC_STATS_TMP")"
+    STAT_FILES_CREATED="$(_rsync_stat "Number of created files:" "$RSYNC_STATS_TMP")"
+    STAT_FILES_DELETED="$(_rsync_stat "Number of deleted files:" "$RSYNC_STATS_TMP")"
+    STAT_TRANSFERRED="$(_rsync_stat "Total transferred file size:" "$RSYNC_STATS_TMP")"
+
     cat >>"$PROM_TMP" <<EOF
 fsbackup_snapshot_last_success{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_snapshot_bytes{class="${CLASS}",target="${id}"} ${SNAP_BYTES}
+fsbackup_snapshot_files_total{class="${CLASS}",target="${id}"} ${STAT_FILES_TOTAL}
+fsbackup_snapshot_files_created{class="${CLASS}",target="${id}"} ${STAT_FILES_CREATED}
+fsbackup_snapshot_files_deleted{class="${CLASS}",target="${id}"} ${STAT_FILES_DELETED}
+fsbackup_snapshot_transferred_bytes{class="${CLASS}",target="${id}"} ${STAT_TRANSFERRED}
 fsbackup_runner_target_last_seen{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_runner_target_last_exit_code{class="${CLASS}",target="${id}"} 0
 EOF
@@ -168,6 +186,8 @@ fsbackup_runner_target_last_seen{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_runner_target_last_exit_code{class="${CLASS}",target="${id}"} ${rc}
 EOF
   fi
+
+  rm -f "$RSYNC_STATS_TMP"
 
 done
 

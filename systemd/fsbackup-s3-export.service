@@ -1,0 +1,10 @@
+[Unit]
+Description=fsbackup S3 export (weekly/monthly/annual snapshots)
+After=fsbackup-mirror-promote.service
+
+[Service]
+UMask=0022
+Type=oneshot
+User=fsbackup
+Group=fsbackup
+ExecStart=/opt/fsbackup/s3/fs-export-s3.sh

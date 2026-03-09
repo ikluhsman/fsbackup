@@ -1,0 +1,9 @@
+[Unit]
+Description=Run fsbackup S3 export nightly
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,2 +1,8 @@
 SNAPSHOT_ROOT="/backup/snapshots"
-SNAPSHOT_MIRROR_ROOT="/backup2"
+SNAPSHOT_MIRROR_ROOT="/backup2/snapshots"
+MIRROR_SKIP_CLASSES="class3"
+
+# S3 export (Phase 6) — set these to enable fs-export-s3.sh
+S3_BUCKET="fsbackup-snapshots-XXXXXX"
+S3_SKIP_CLASSES="class3"
+# S3_AWS_PROFILE="fsbackup"    # defaults to fsbackup if unset
