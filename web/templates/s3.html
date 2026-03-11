@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}S3 Offsite — fsbackup{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-start justify-between">
+  <div>
+    <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">S3 Offsite</h1>
+    <p class="text-zinc-500 text-sm mt-1">
+      <span class="font-mono text-xs text-zinc-400">{{ bucket }}</span>
+      &mdash; weekly, monthly, and annual archives (age-encrypted)
+    </p>
+  </div>
+  {% if objects %}
+  <div class="text-xs text-zinc-400 text-right">
+    {{ objects|length }} object{{ 's' if objects|length != 1 }}<br>
+    <span class="text-zinc-500">
+      {% set total = namespace(b=0) %}
+      {% for o in objects %}{% set total.b = total.b + o.size %}{% endfor %}
+      {% if total.b >= 1073741824 %}{{ "%.1f"|format(total.b / 1073741824) }} GB total
+      {% elif total.b >= 1048576 %}{{ "%.1f"|format(total.b / 1048576) }} MB total
+      {% else %}{{ total.b }} B total
+      {% endif %}
+    </span>
+  </div>
+  {% endif %}
+</div>
+
+{% if error %}
+<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-400 text-sm mb-6">
+  <strong>S3 error:</strong> {{ error }}
+</div>
+{% endif %}
+
+<!-- Breadcrumb -->
+<div class="flex items-center gap-1.5 text-sm mb-5 flex-wrap">
+  <a href="/s3" class="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-medium">
+    {{ bucket }}
+  </a>
+  {% for crumb in breadcrumbs %}
+    <span class="text-zinc-300 dark:text-zinc-600">/</span>
+    <a href="/s3?prefix={{ crumb.prefix | urlencode }}"
+       class="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-mono text-xs">{{ crumb.name }}</a>
+  {% endfor %}
+</div>
+
+<!-- Content -->
+{% if not error %}
+<div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+
+  {% if not prefixes and not objects %}
+    <div class="px-4 py-10 text-center text-zinc-400 text-sm">
+      {% if prefix %}
+        No objects found at this prefix.
+      {% else %}
+        Bucket is empty or no access.
+      {% endif %}
+    </div>
+
+  {% else %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-zinc-200 dark:border-zinc-800 text-left text-xs text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-zinc-800/50">
+        <th class="px-4 py-3 font-medium">Name</th>
+        <th class="px-4 py-3 font-medium">Size</th>
+        <th class="px-4 py-3 font-medium">Last Modified</th>
+        <th class="px-4 py-3 font-medium">Storage</th>
+        <th class="px-4 py-3 font-medium"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+
+      <!-- Parent dir link -->
+      {% if prefix %}
+      {% set parent = "/".join(prefix.rstrip("/").split("/")[:-1]) %}
+      {% set parent_prefix = (parent + "/") if parent else "" %}
+      <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+        <td class="px-4 py-2.5 font-mono text-zinc-400 text-xs" colspan="5">
+          <a href="/s3?prefix={{ parent_prefix | urlencode }}"
+             class="hover:text-zinc-700 dark:hover:text-white">&larr; ..</a>
+        </td>
+      </tr>
+      {% endif %}
+
+      <!-- Prefixes (virtual folders) -->
+      {% for p in prefixes %}
+      {% set folder_name = p.rstrip("/").split("/")[-1] %}
+      {% set tier_colors = {
+        "daily":   "text-sky-500",
+        "weekly":  "text-violet-500",
+        "monthly": "text-amber-500",
+        "annual":  "text-rose-500"
+      } %}
+      <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+        <td class="px-4 py-2.5" colspan="4">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 {{ tier_colors.get(folder_name, 'text-brand-500') }} shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+            </svg>
+            <a href="/s3?prefix={{ p | urlencode }}"
+               class="font-mono text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">
+              {{ folder_name }}/
+            </a>
+          </div>
+        </td>
+        <td class="px-4 py-2.5"></td>
+      </tr>
+      {% endfor %}
+
+      <!-- Objects (actual archive files) -->
+      {% for obj in objects %}
+      <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+        <td class="px-4 py-2.5">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-zinc-400 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+            <span class="font-mono text-xs text-zinc-700 dark:text-zinc-300 break-all">{{ obj.name }}</span>
+          </div>
+        </td>
+        <td class="px-4 py-2.5 text-xs text-zinc-400 font-mono whitespace-nowrap">
+          {% if obj.size >= 1073741824 %}{{ "%.1f"|format(obj.size / 1073741824) }} GB
+          {% elif obj.size >= 1048576 %}{{ "%.1f"|format(obj.size / 1048576) }} MB
+          {% elif obj.size >= 1024 %}{{ "%.1f"|format(obj.size / 1024) }} KB
+          {% else %}{{ obj.size }} B
+          {% endif %}
+        </td>
+        <td class="px-4 py-2.5 text-xs text-zinc-400 font-mono whitespace-nowrap">
+          {{ obj.last_modified.strftime("%Y-%m-%d %H:%M") }}
+        </td>
+        <td class="px-4 py-2.5">
+          {% if obj.storage_class and obj.storage_class != "STANDARD" %}
+            <span class="text-xs text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 rounded font-mono">
+              {{ obj.storage_class }}
+            </span>
+          {% else %}
+            <span class="text-xs text-zinc-400"></span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2.5 text-right">
+          <a href="/api/s3/download?key={{ obj.key | urlencode }}"
+             title="Download (presigned URL, valid 1h)"
+             class="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 px-2.5 py-1 rounded-lg transition-colors">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Download
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+
+    </tbody>
+  </table>
+  {% endif %}
+
+</div>
+{% endif %}
+
+<!-- Decrypt instructions -->
+{% if objects %}
+<div class="mt-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+  <p class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Decrypting a downloaded archive</p>
+  <p class="text-xs text-zinc-400 mb-3">Archives are <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">tar | zstd | age</code> encrypted. You need the age private key to decrypt:</p>
+  <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 overflow-x-auto">age -d -i /etc/fsbackup/age.key &lt;archive&gt;.tar.zst.age | zstd -d | tar -xf - -C /restore/path/</pre>
+</div>
+{% endif %}
+
+{% endblock %}

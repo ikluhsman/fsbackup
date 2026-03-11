@@ -7,8 +7,12 @@ import yaml
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import boto3
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import BotoCoreError, ClientError
+
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -30,6 +34,17 @@ RETENTION = {
 
 TIERS   = ["daily", "weekly", "monthly", "annual"]
 CLASSES = ["class1", "class2", "class3"]
+
+# S3
+S3_BUCKET  = os.environ.get("S3_BUCKET",  "fsbackup-snapshots-947012")
+S3_PROFILE = os.environ.get("S3_PROFILE", "fsbackup")
+S3_REGION  = os.environ.get("S3_REGION",  "us-west-2")
+PRESIGN_TTL = 3600  # seconds
+
+
+def s3_client():
+    session = boto3.Session(profile_name=S3_PROFILE)
+    return session.client("s3", region_name=S3_REGION, config=BotoConfig(signature_version="s3v4"))
 
 # ---------------------------------------------------------------------------
 # App
@@ -319,6 +334,72 @@ async def run_page(request: Request):
 @app.get("/utilities", response_class=HTMLResponse)
 async def utilities_page(request: Request):
     return templates.TemplateResponse("utilities.html", {"request": request})
+
+
+@app.get("/s3", response_class=HTMLResponse)
+async def s3_page(request: Request, prefix: str = ""):
+    """S3 bucket browser. prefix is a key prefix like 'weekly/class1/myapp/'."""
+    objects  = []
+    prefixes = []
+    error    = None
+
+    try:
+        s3  = s3_client()
+        paginator = s3.get_paginator("list_objects_v2")
+        pages = paginator.paginate(
+            Bucket=S3_BUCKET,
+            Prefix=prefix,
+            Delimiter="/",
+        )
+        for page in pages:
+            for cp in page.get("CommonPrefixes") or []:
+                prefixes.append(cp["Prefix"])
+            for obj in page.get("Contents") or []:
+                if obj["Key"] == prefix:
+                    continue  # skip the prefix itself if it appears as an object
+                objects.append({
+                    "key":           obj["Key"],
+                    "name":          obj["Key"].split("/")[-1],
+                    "size":          obj["Size"],
+                    "last_modified": obj["LastModified"],
+                    "storage_class": obj.get("StorageClass", "STANDARD"),
+                })
+    except (BotoCoreError, ClientError) as e:
+        error = str(e)
+
+    # Build breadcrumb from prefix
+    breadcrumbs = []
+    parts = [p for p in prefix.rstrip("/").split("/") if p]
+    for i, part in enumerate(parts):
+        breadcrumbs.append({
+            "name":   part,
+            "prefix": "/".join(parts[:i+1]) + "/",
+        })
+
+    return templates.TemplateResponse("s3.html", {
+        "request":     request,
+        "prefix":      prefix,
+        "prefixes":    prefixes,
+        "objects":     objects,
+        "breadcrumbs": breadcrumbs,
+        "bucket":      S3_BUCKET,
+        "error":       error,
+    })
+
+
+@app.get("/api/s3/download")
+async def s3_download(key: str):
+    """Generate a presigned URL for the given S3 key and redirect to it."""
+    try:
+        s3  = s3_client()
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": S3_BUCKET, "Key": key},
+            ExpiresIn=PRESIGN_TTL,
+        )
+        return RedirectResponse(url)
+    except (BotoCoreError, ClientError) as e:
+        return HTMLResponse(f"<p class='text-red-400 text-sm'>Error: {e}</p>", status_code=500)
 
 
 # ---------------------------------------------------------------------------
