@@ -8,8 +8,9 @@ id_rsa*
 *.key
 !*.pub
 
-# Local targets — keep out of version control, use conf/targets.yml.example
+# Live config files — use the .example counterparts in conf/
 conf/targets.yml
+conf/fsbackup.conf
 
 # Editor and OS noise
 .DS_Store
