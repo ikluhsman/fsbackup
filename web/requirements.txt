@@ -4,3 +4,4 @@ jinja2
 pyyaml
 python-multipart
 boto3
+python-dotenv

@@ -17,3 +17,5 @@ conf/fsbackup.conf
 *.swp
 *~
 web/__pycache__/
+**/__pycache__/
+*.pyc
