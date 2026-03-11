@@ -110,27 +110,35 @@ Currently displays the form and instructions. Wiring the form POST to invoke
 
 ## Configuration
 
-Copy `.env.example` to `.env` in the `web/` directory and edit as needed.
-The app loads `.env` automatically at startup via `python-dotenv`.
+A `.env` file is **optional**. All variables have defaults baked into `main.py`
+via `os.environ.get("VAR", "default")`, so the app starts with no configuration
+at all and the defaults match a standard fsbackup installation.
+
+Only create a `.env` if you need to override something:
 
 ```bash
 cp web/.env.example web/.env
+# edit web/.env as needed
 ```
+
+The app loads `web/.env` automatically at startup via `python-dotenv`. When
+running under systemd, you can use `EnvironmentFile=` in the unit file instead.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOST` | `0.0.0.0` | Address uvicorn binds to |
-| `PORT` | `8080` | Port uvicorn listens on |
+| `HOST` | `0.0.0.0` | Address to bind to |
+| `PORT` | `8080` | Port to listen on |
 | `SNAPSHOT_ROOT` | `/backup/snapshots` | Primary snapshot directory |
 | `MIRROR_ROOT` | `/backup2/snapshots` | Mirror snapshot directory |
 | `TARGETS_FILE` | `/etc/fsbackup/targets.yml` | targets.yml path |
 | `S3_BUCKET` | `fsbackup-snapshots-947012` | S3 bucket name |
 | `S3_PROFILE` | `fsbackup` | AWS credentials profile name |
 | `S3_REGION` | `us-west-2` | AWS region |
-| `PRESIGN_TTL` | `3600` | Presigned URL expiry in seconds |
+| `PRESIGN_TTL` | `3600` | Presigned download URL expiry (seconds) |
 
-When running under systemd, variables can also be set via `Environment=` or
-`EnvironmentFile=` in the unit file instead of using `.env`.
+> `HOST` and `PORT` are read by the `if __name__ == "__main__"` entrypoint in
+> `main.py`. If you start the app via `uvicorn main:app` directly on the command
+> line, pass `--host` and `--port` explicitly or export the variables first.
 
 ---
 
@@ -140,18 +148,14 @@ When running under systemd, variables can also be set via `Environment=` or
 cd /opt/fsbackup/web
 pip install -r requirements.txt
 
-# With .env file (reads HOST/PORT automatically):
-uvicorn main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8080}" --reload
-```
-
-Or simply:
-
-```bash
+# Simplest — uses all defaults, no .env needed:
 uvicorn main:app --reload
+
+# Or via the entrypoint, which reads HOST/PORT from .env:
+python3 main.py
 ```
 
-The `--reload` flag restarts on file changes — useful during development. Remove it
-in production.
+The `--reload` flag restarts on file changes — remove it in production.
 
 ---
 

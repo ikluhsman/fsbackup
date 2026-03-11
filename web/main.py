@@ -508,3 +508,13 @@ async def api_run(request: Request, action: str, cls: str = Form(default="")):
         "result_msg": result_msg,
         "unit":       unit or action,
     })
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "8080")),
+        reload=False,
+    )
