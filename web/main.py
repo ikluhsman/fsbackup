@@ -42,7 +42,7 @@ TIERS   = ["daily", "weekly", "monthly", "annual"]
 CLASSES = ["class1", "class2", "class3"]
 
 # S3
-S3_BUCKET  = os.environ.get("S3_BUCKET",  "fsbackup-snapshots-947012")
+S3_BUCKET  = os.environ.get("S3_BUCKET",  "fsbackup-snapshots-SUFFIX")
 S3_PROFILE = os.environ.get("S3_PROFILE", "fsbackup")
 S3_REGION  = os.environ.get("S3_REGION",  "us-west-2")
 PRESIGN_TTL = 3600  # seconds

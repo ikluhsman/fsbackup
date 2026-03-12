@@ -118,7 +118,7 @@ SNAPSHOT_ROOT=/backup/snapshots
 MIRROR_ROOT=/backup2/snapshots
 TARGETS_FILE=/etc/fsbackup/targets.yml
 
-S3_BUCKET=fsbackup-snapshots-947012
+S3_BUCKET=fsbackup-snapshots-SUFFIX
 S3_PROFILE=fsbackup
 S3_REGION=us-west-2
 EOF

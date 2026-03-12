@@ -76,7 +76,7 @@
   <p class="text-xs text-zinc-400 mb-3">To restore from the command line:</p>
   <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 overflow-x-auto">/opt/fsbackup/utils/fs-restore.sh --snapshot /backup/snapshots/&lt;tier&gt;/&lt;date&gt;/&lt;class&gt;/&lt;target&gt; --dest /restore/path</pre>
   <p class="text-xs text-zinc-400 mt-4">For S3 archives:</p>
-  <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 mt-1 overflow-x-auto">aws s3 cp s3://fsbackup-snapshots-947012/&lt;tier&gt;/&lt;class&gt;/&lt;target&gt;/&lt;archive&gt;.tar.zst.age . \
+  <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 mt-1 overflow-x-auto">aws s3 cp s3://fsbackup-snapshots-SUFFIX/&lt;tier&gt;/&lt;class&gt;/&lt;target&gt;/&lt;archive&gt;.tar.zst.age . \
   &amp;&amp; age -d -i /etc/fsbackup/age.key &lt;archive&gt;.tar.zst.age | zstd -d | tar -xf - -C /restore/path/</pre>
 </div>
 {% endblock %}

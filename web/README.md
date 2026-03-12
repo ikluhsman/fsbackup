@@ -146,7 +146,7 @@ running under systemd, you can use `EnvironmentFile=` in the unit file instead.
 | `SNAPSHOT_ROOT` | `/backup/snapshots` | Primary snapshot directory |
 | `MIRROR_ROOT` | `/backup2/snapshots` | Mirror snapshot directory |
 | `TARGETS_FILE` | `/etc/fsbackup/targets.yml` | targets.yml path |
-| `S3_BUCKET` | `fsbackup-snapshots-947012` | S3 bucket name |
+| `S3_BUCKET` | `fsbackup-snapshots-SUFFIX` | S3 bucket name |
 | `S3_PROFILE` | `fsbackup` | AWS credentials profile name |
 | `S3_REGION` | `us-west-2` | AWS region |
 | `PRESIGN_TTL` | `3600` | Presigned download URL expiry (seconds) |
