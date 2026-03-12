@@ -143,7 +143,7 @@ age -d -i /etc/fsbackup/age.key <archive>.tar.zst.age | zstd -d | tar -xf - -C /
 - `utils/fs-annual-mirror-check.sh`: No timer wires it up yet.
 - class3 `system.*` targets (all hosts) removed pending proper host-expansion feature.
 - `fsbackup-s3-export.timer`: enabled and running nightly at 04:30.
-- Delta metrics (`fsbackup_snapshot_files_*`, `fsbackup_snapshot_transferred_bytes`) won't appear in Prometheus until the runner runs at least once with the updated script.
+- `grafana.data` target: fails nightly with rsync exit 24 (vanishing source file: `grafana.db-journal` — SQLite WAL artifact). Fix options: exclude the file in `targets.yml`, or stop Grafana briefly during backup window. Snapshot data itself transfers cleanly.
 
 ---
 
@@ -156,6 +156,14 @@ Hosts: `fs`, `denhpsvr1`, `denhpsvr2`, `hs`, `ns1`, `ns2`, `rp`, `weewx`, `mdns`
 rsync `exclude` paths are **relative to the source path**, not the remote root.
 
 ---
+
+## Web UI (`web/`)
+
+FastAPI + HTMX + Tailwind app running as the `fsbackup` user via `fsbackup-web.service`.
+
+- **Log viewer** (`/run` page): reads from log files in `/var/lib/fsbackup/log/`, not journalctl. Unit-to-log mapping is `_UNIT_LOG_MAP` in `web/main.py`. Includes the previous night's uncompressed rotated file (via `delaycompress` logrotate glob) to give ~1–2 nights of history.
+- **Required groups for `fsbackup` user**: `fsbackup`, `nodeexp_txt`, `dbexports`, `systemd-journal` (journal fallback). `web/setup.sh` handles all of these.
+- **Restart required** after any group membership change: `systemctl restart fsbackup-web.service`
 
 ## Git / Deployment
 
