@@ -3,13 +3,6 @@
 {% elif not lines %}
 <div class="text-zinc-500 text-xs font-mono p-4">No journal entries found for this unit.</div>
 {% else %}
-<pre id="journal-pre-{{ unit | replace('@','_') | replace('.','_') | replace('-','_') }}"
-     class="flex-1 text-xs font-mono text-zinc-300 leading-5 whitespace-pre-wrap break-all p-3 overflow-y-auto h-full">{% for line in lines %}{{ line }}
+<pre class="flex-1 text-xs font-mono text-zinc-300 leading-5 whitespace-pre-wrap break-all p-3 overflow-y-auto h-full">{% for line in lines %}{{ line }}
 {% endfor %}</pre>
-<script>
-(function() {
-  var el = document.getElementById("journal-pre-{{ unit | replace('@','_') | replace('.','_') | replace('-','_') }}");
-  if (el) el.scrollTop = el.scrollHeight;
-})();
-</script>
 {% endif %}

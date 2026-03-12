@@ -70,6 +70,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3b. systemd-journal group (needed to read journalctl logs in the UI)
+# ---------------------------------------------------------------------------
+if id -nG "$WEB_USER" | grep -qw systemd-journal; then
+    ok "$WEB_USER is already in the systemd-journal group"
+else
+    info "Adding $WEB_USER to the systemd-journal group (needed for log viewer)..."
+    usermod -aG systemd-journal "$WEB_USER"
+    ok "Added — service must be restarted for the new group to take effect"
+fi
+echo
+
+# ---------------------------------------------------------------------------
 # 4. Write web/.env
 # ---------------------------------------------------------------------------
 ENV_FILE="$SCRIPT_DIR/.env"
