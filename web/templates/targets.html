@@ -27,17 +27,16 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {% for target in class_data.get('targets', []) %}
+          {% for target in class_data %}
           <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-            <td class="px-4 py-2.5 font-medium text-zinc-900 dark:text-white">{{ target.name }}</td>
+            <td class="px-4 py-2.5 font-medium text-zinc-900 dark:text-white">{{ target.id }}</td>
             <td class="px-4 py-2.5 text-zinc-600 dark:text-zinc-300 font-mono text-xs">{{ target.host }}</td>
             <td class="px-4 py-2.5 text-zinc-600 dark:text-zinc-300 font-mono text-xs">{{ target.source }}</td>
-            <td class="px-4 py-2.5 text-xs text-zinc-400">
-              {% set excludes = target.get('rsync_opts', []) | select('match', '.*--exclude.*') | list %}
-              {% if excludes %}{{ excludes | join(', ') }}{% else %}—{% endif %}
+            <td class="px-4 py-2.5 text-xs text-zinc-400 font-mono max-w-xs truncate">
+              {{ target.rsync_opts if target.rsync_opts is defined else '—' }}
             </td>
             <td class="px-4 py-2.5">
-              <a href="/snapshots?target={{ target.name }}"
+              <a href="/snapshots?target={{ target.id }}"
                  class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">Snapshots &rarr;</a>
             </td>
           </tr>

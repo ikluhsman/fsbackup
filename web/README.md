@@ -3,21 +3,19 @@
 A lightweight read-mostly admin interface for the fsbackup system. Built with
 FastAPI, HTMX, and Tailwind CSS. Runs as a systemd service on the backup server.
 
----
+## Contents
 
-## Screenshots
-
-<!-- Add screenshots to docs/screenshots/ and update the links below -->
-
-| Dashboard | Snapshots | Run Jobs |
-|-----------|-----------|----------|
-| ![Dashboard](../docs/screenshots/dashboard.png) | ![Snapshots](../docs/screenshots/snapshots.png) | ![Run Jobs](../docs/screenshots/run.png) |
-
-| S3 Offsite | Targets | Login |
-|------------|---------|-------|
-| ![S3](../docs/screenshots/s3.png) | ![Targets](../docs/screenshots/targets.png) | ![Login](../docs/screenshots/login.png) |
-
-> Screenshots pending — take them from a running instance and drop PNG files into `docs/screenshots/`.
+- [Architecture](#architecture)
+- [Pages and routes](#pages-and-routes)
+- [How scripts and services are called](#how-scripts-and-services-are-called)
+- [Configuration](#configuration)
+- [Running locally](#running-locally)
+- [Setup](#setup)
+- [Permissions](#permissions)
+- [Deploying as a systemd service](#deploying-as-a-systemd-service)
+- [Dark / light mode](#dark--light-mode)
+- [Extending the UI](#extending-the-ui)
+- [Screenshots](#screenshots)
 
 ---
 
@@ -38,7 +36,7 @@ web/
     restore.html       # Restore form
     run.html           # Trigger systemd services
     s3.html            # S3 offsite bucket browser
-    utilities.html     # Admin utilities (placeholder)
+    utilities.html     # Admin CLI tool reference cards
     partials/
       snapshot_rows.html   # HTMX swap target: snapshot table body
       dir_entries.html     # HTMX swap target: directory listing rows
@@ -71,7 +69,7 @@ step and no Node.js requirement.
 | `GET /restore` | Restore | Restore form with recent-snapshot quick-select sidebar |
 | `GET /run` | Run | Trigger runner/doctor per class, promote, mirror |
 | `GET /s3` | S3 Offsite | Prefix-based S3 bucket browser with presigned download |
-| `GET /utilities` | Utilities | Admin tool stubs (coming soon) |
+| `GET /utilities` | Utilities | Reference cards for admin CLI tools (trust-host, rename, restore, etc.) |
 
 ### HTMX partial endpoints
 
@@ -118,9 +116,10 @@ Presigned URLs expire after `PRESIGN_TTL` seconds (default: 3600).
 
 ### Restore (Restore page)
 
-Currently displays the form and instructions. Wiring the form POST to invoke
-`utils/fs-restore.sh` is the next step — see `POST /api/run/restore` stub in
-`main.py`.
+`POST /api/run/restore` runs rsync directly. The snapshot path is validated
+against `SNAPSHOT_ROOT` and `MIRROR_ROOT` before execution. Dry-run mode
+(default: on) passes `--dry-run --stats` to rsync and displays a preview without
+modifying any files.
 
 ---
 
@@ -262,3 +261,15 @@ avoid a flash.
   `hx-target` in the calling template.
 - **New utility**: add a card to `utilities.html` and a `POST /api/run/<action>`
   handler that calls the relevant script in `utils/`.
+
+---
+
+## Screenshots
+
+<img src="../docs/screenshots/fsb_dashboard.png" width="600"> <img src="../docs/screenshots/fsb_snapshots.png" width="600">
+
+<img src="../docs/screenshots/fsb_run_jobs.png" width="600"> <img src="../docs/screenshots/fsb_targets.png" width="600">
+
+<img src="../docs/screenshots/fsb_s3_browse.png" width="600"> <img src="../docs/screenshots/fsb_s3_download.png" width="600">
+
+<img src="../docs/screenshots/fsb_restore.png" width="600"> <img src="../docs/screenshots/fsb_browse.png" width="600">

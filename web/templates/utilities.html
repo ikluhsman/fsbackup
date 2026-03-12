@@ -4,40 +4,96 @@
 {% block content %}
 <div class="mb-6">
   <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Utilities</h1>
-  <p class="text-zinc-500 text-sm mt-1">Administrative tools — coming soon</p>
+  <p class="text-zinc-500 text-sm mt-1">Manual administrative tools — run from the command line as <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-xs">fsbackup</code> or root</p>
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-  {% set utils = [
-    ("Trust Host",          "fs-trust-host.sh",           "Seed SSH host keys for a new backup source host"),
-    ("Rename Target",       "fs-target-rename.sh",        "Rename a target across all snapshot tiers"),
-    ("Annual Mirror Check", "fs-annual-mirror-check.sh",  "Verify annual snapshots are mirrored correctly"),
-    ("Fix Node Exporter",   "fs-nodeexp-fix.sh",          "Repair node_exporter textfile collector permissions"),
-  ] %}
-  {% for title, script, desc in utils %}
-  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm opacity-60">
-    <div class="flex items-start justify-between">
+<div class="space-y-4">
+
+  <!-- Trust Host -->
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+    <div class="flex items-start justify-between mb-3">
       <div>
-        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ title }}</p>
-        <p class="text-xs text-zinc-500 mt-1">{{ desc }}</p>
-        <p class="text-xs text-zinc-400 dark:text-zinc-600 font-mono mt-2">utils/{{ script }}</p>
+        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Trust Host</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Seed SSH host keys for a new backup source host into the fsbackup known_hosts file</p>
       </div>
-      <span class="text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 rounded-full shrink-0">Soon</span>
+      <span class="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0 ml-4">utils/fs-trust-host.sh</span>
+    </div>
+    <pre class="text-xs font-mono bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 rounded-lg p-3 overflow-x-auto">sudo -u fsbackup /opt/fsbackup/utils/fs-trust-host.sh &lt;hostname&gt; [port]</pre>
+    <p class="text-xs text-zinc-400 mt-2">Run once when adding a new host. Defaults to port 22. Emits a Prometheus metric on completion.</p>
+  </div>
+
+  <!-- Rename Target -->
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Rename Target</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Rename a target ID across all snapshot tiers on primary and mirror storage</p>
+      </div>
+      <span class="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0 ml-4">utils/fs-target-rename.sh</span>
+    </div>
+    <pre class="text-xs font-mono bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 rounded-lg p-3 overflow-x-auto">sudo /opt/fsbackup/utils/fs-target-rename.sh \
+  --class &lt;class1|class2|class3&gt; \
+  --from &lt;old-target-id&gt; \
+  --to   &lt;new-target-id&gt; \
+  --move | --delete \
+  [--dry-run]</pre>
+    <div class="mt-2 space-y-0.5 text-xs text-zinc-400">
+      <p><code class="font-mono">--move</code> — rename the directory in place (keeps snapshot history)</p>
+      <p><code class="font-mono">--delete</code> — remove the old target's snapshot directories entirely</p>
+      <p><code class="font-mono">--dry-run</code> — preview changes without modifying anything</p>
     </div>
   </div>
-  {% endfor %}
-</div>
 
-<div class="mt-8 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
-  <p class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Manual utilities</p>
-  <p class="text-xs text-zinc-400 mb-3">Run these directly from the command line until the UI is built out:</p>
-  <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 overflow-x-auto"># Trust a new SSH host
-sudo -u fsbackup /opt/fsbackup/utils/fs-trust-host.sh &lt;hostname&gt;
+  <!-- Annual Mirror Check -->
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Annual Mirror Check</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Verify that annual snapshots on the primary drive are present and matching on the mirror</p>
+      </div>
+      <span class="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0 ml-4">utils/fs-annual-mirror-check.sh</span>
+    </div>
+    <pre class="text-xs font-mono bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 rounded-lg p-3 overflow-x-auto">sudo -u fsbackup /opt/fsbackup/utils/fs-annual-mirror-check.sh</pre>
+    <p class="text-xs text-zinc-400 mt-2">Run after the January 5 annual promotion. Compares byte counts between <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">/backup/snapshots/annual</code> and <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">/backup2/snapshots/annual</code> and emits a Prometheus metric.</p>
+  </div>
 
-# Rename a target across all tiers
-sudo -u fsbackup /opt/fsbackup/utils/fs-target-rename.sh --old &lt;name&gt; --new &lt;name&gt;
+  <!-- Fix Node Exporter -->
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Fix Node Exporter Permissions</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Repair ownership, group ACLs, and default ACLs on the node_exporter textfile collector directory</p>
+      </div>
+      <span class="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0 ml-4">utils/fs-nodeexp-fix.sh</span>
+    </div>
+    <pre class="text-xs font-mono bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 rounded-lg p-3 overflow-x-auto">sudo /opt/fsbackup/utils/fs-nodeexp-fix.sh [--web-user &lt;username&gt;]</pre>
+    <div class="mt-2 space-y-0.5 text-xs text-zinc-400">
+      <p><code class="font-mono">--web-user &lt;username&gt;</code> — also grant read ACLs (including default ACL for new files) to the web UI user</p>
+      <p>Example: <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">sudo /opt/fsbackup/utils/fs-nodeexp-fix.sh --web-user fsbackup</code></p>
+    </div>
+  </div>
 
-# Check annual mirror status
-sudo -u fsbackup /opt/fsbackup/utils/fs-annual-mirror-check.sh</pre>
+  <!-- Restore -->
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Restore</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Restore files from a snapshot to a local path or push to a remote host over SSH</p>
+      </div>
+      <span class="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0 ml-4">utils/fs-restore.sh</span>
+    </div>
+    <pre class="text-xs font-mono bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 rounded-lg p-3 overflow-x-auto"># List available snapshots
+fs-restore.sh list --type &lt;daily|weekly|monthly&gt; [--class &lt;class&gt;] [--date &lt;key&gt;]
+
+# Restore locally
+fs-restore.sh restore --type daily --class class2 --id nginx.config \
+  --latest --to /tmp/restore-nginx
+
+# Restore to remote host
+fs-restore.sh restore --type daily --class class2 --id bind.named.conf \
+  --date 2026-01-29 --to-host ns1 --to-path /tmp/restore-bind</pre>
+    <p class="text-xs text-zinc-400 mt-2">The <a href="/restore" class="text-brand-600 dark:text-brand-400 hover:underline">Restore page</a> provides a UI for local restores with dry-run preview.</p>
+  </div>
+
 </div>
 {% endblock %}
