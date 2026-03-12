@@ -7,6 +7,7 @@ fsbackup is a pull-based snapshot backup system for home lab Linux servers. The 
 ## Table of contents
 
 - [How it works](#how-it-works)
+- [Web UI](#web-ui)
 - [Repository layout](#repository-layout)
 - [Data classes](#data-classes)
 - [Snapshot layout](#snapshot-layout)
@@ -31,6 +32,44 @@ fsbackup is a pull-based snapshot backup system for home lab Linux servers. The 
 4. Older snapshots are promoted to weekly, monthly, and annual tiers on a schedule, then pruned when they age out.
 5. The secondary drive (`/backup2`) is kept in sync as a mirror.
 6. Prometheus metrics are written after each run so Grafana can show backup health at a glance.
+
+---
+
+## Web UI
+
+fsbackup includes a browser-based UI for monitoring backup status, browsing snapshots, running jobs on demand, and initiating restores. It runs as a FastAPI + HTMX app on the backup server.
+
+**Dashboard** — live status of all targets and recent run outcomes:
+
+![Dashboard](docs/screenshots/fsb_dashboard.png)
+
+**Targets** — lists all configured targets with their class and host:
+
+![Targets](docs/screenshots/fsb_targets.png)
+
+**Snapshots** — browse available snapshots by tier, class, and date:
+
+![Snapshots](docs/screenshots/fsb_snapshots.png)
+
+**Browse** — explore the file tree inside any snapshot:
+
+![Browse](docs/screenshots/fsb_browse.png)
+
+**Restore** — restore files from a snapshot to a local or remote path:
+
+![Restore](docs/screenshots/fsb_restore.png)
+
+**Run jobs** — trigger runner or doctor jobs manually and follow the log output:
+
+![Run jobs](docs/screenshots/fsb_run_jobs.png)
+
+**S3 browse** — list what's in the S3 bucket by tier, class, and target:
+
+![S3 browse](docs/screenshots/fsb_s3_browse.png)
+
+**S3 download** — generate a download command for any S3 archive:
+
+![S3 download](docs/screenshots/fsb_s3_download.png)
 
 ---
 
