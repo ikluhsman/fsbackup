@@ -1,0 +1,16 @@
+[Unit]
+Description=fsbackup web UI
+After=network.target
+
+[Service]
+Type=simple
+User=fsbackup
+Group=fsbackup
+WorkingDirectory=/opt/fsbackup/web
+ExecStart=/opt/fsbackup/web/.venv/bin/python3 /opt/fsbackup/web/main.py
+EnvironmentFile=/opt/fsbackup/web/.env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
