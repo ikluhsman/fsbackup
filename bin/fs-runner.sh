@@ -107,6 +107,7 @@ echo
 # -----------------------------------------------------------------------------
 
 declare -A FAILURE_COUNTERS
+declare -A PREV_LAST_SUCCESS
 
 if [[ -f "$PROM_FILE" ]]; then
   while read -r line; do
@@ -114,6 +115,10 @@ if [[ -f "$PROM_FILE" ]]; then
       target=$(echo "$line" | sed -n 's/.*target="\([^"]*\)".*/\1/p')
       value=$(echo "$line" | awk '{print $NF}')
       FAILURE_COUNTERS["$target"]="$value"
+    elif [[ "$line" =~ fsbackup_snapshot_last_success ]]; then
+      target=$(echo "$line" | sed -n 's/.*target="\([^"]*\)".*/\1/p')
+      value=$(echo "$line" | awk '{print $NF}')
+      PREV_LAST_SUCCESS["$target"]="$value"
     fi
   done < "$PROM_FILE"
 fi
@@ -192,6 +197,7 @@ fsbackup_runner_target_last_exit_code{class="${CLASS}",target="${id}"} 0
 EOF
 
     FAILURE_COUNTERS["$id"]="${FAILURE_COUNTERS["$id"]:-0}"
+    log "$id" "Snapshot complete (exit 0)"
 
   else
     ((FAILED++))
@@ -202,6 +208,11 @@ fsbackup_snapshot_last_failure{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_runner_target_last_seen{class="${CLASS}",target="${id}"} ${NOW_EPOCH}
 fsbackup_runner_target_last_exit_code{class="${CLASS}",target="${id}"} ${rc}
 EOF
+    # Carry forward the previous last_success so Grafana retains the history
+    if [[ -n "${PREV_LAST_SUCCESS[$id]:-}" ]]; then
+      echo "fsbackup_snapshot_last_success{class=\"${CLASS}\",target=\"${id}\"} ${PREV_LAST_SUCCESS[$id]}" >>"$PROM_TMP"
+    fi
+    log "$id" "Snapshot FAILED (exit ${rc})"
   fi
 
   rm -f "$RSYNC_STATS_TMP"

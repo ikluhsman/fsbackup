@@ -187,9 +187,10 @@ The script will:
 1. Ask which user will run the web UI
 2. Add that user to the `fsbackup` group (covers snapshot dirs and config files)
 3. Apply ACLs for paths not covered by the group (Prometheus textfile dir, AWS credentials)
-4. Generate a `web/.env` with a random `SECRET_KEY`, prompting for host/port and auth settings
-5. Create the Python venv and install dependencies
-6. Optionally write and enable a systemd unit
+4. Add that user to the `systemd-journal` group (needed for the log viewer on the Run page)
+5. Generate a `web/.env` with a random `SECRET_KEY`, prompting for host/port and auth settings
+6. Create the Python venv and install dependencies
+7. Optionally write and enable a systemd unit
 
 ## Permissions
 
@@ -203,6 +204,7 @@ this automatically. If you need to understand or redo it manually:
 | `/etc/fsbackup/` | read + traverse | `fsbackup` group |
 | `/var/lib/node_exporter/textfile_collector/` | read | ACL (set by setup.sh) |
 | `/var/lib/fsbackup/.aws/` | read | ACL (set by setup.sh) |
+| systemd journal | read | `systemd-journal` group (set by setup.sh) |
 
 The app sets `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` to point at
 `/var/lib/fsbackup/.aws/` at startup, so boto3 finds the `fsbackup` AWS profile

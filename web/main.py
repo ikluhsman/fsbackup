@@ -598,19 +598,58 @@ async def api_browse(request: Request, path: str = ""):
     })
 
 
+_LOG_DIR = Path("/var/lib/fsbackup/log")
+
+# Map unit name prefixes to their log files (most specific first).
+_UNIT_LOG_MAP = [
+    ("fsbackup-runner@",       _LOG_DIR / "backup.log"),
+    ("fsbackup-promote",       _LOG_DIR / "backup.log"),
+    ("fsbackup-doctor@",       _LOG_DIR / "fs-orphans.log"),
+    ("fsbackup-mirror-daily",  _LOG_DIR / "mirror.log"),
+    ("fsbackup-mirror-retention", _LOG_DIR / "mirror-retention.log"),
+    ("fsbackup-s3-export",     _LOG_DIR / "s3-export.log"),
+]
+
+def _unit_log_file(unit: str) -> Path | None:
+    for prefix, path in _UNIT_LOG_MAP:
+        if unit.startswith(prefix):
+            return path
+    return None
+
+
 @app.get("/api/journal/{unit:path}", response_class=HTMLResponse)
-async def api_journal(request: Request, unit: str, n: int = 80):
-    """Return the last n lines of journalctl output for a unit."""
-    try:
-        r = subprocess.run(
-            ["journalctl", "-u", unit, "-n", str(n), "--no-pager",
-             "--output=short-iso", "--no-hostname"],
-            capture_output=True, text=True, timeout=8
-        )
-        lines = r.stdout.splitlines() if r.returncode == 0 else []
-        error = r.stderr.strip() if r.returncode != 0 else ""
-    except Exception as e:
-        lines, error = [], str(e)
+async def api_journal(request: Request, unit: str, n: int = 200):
+    """Return the last n lines of the unit's log file, falling back to journalctl."""
+    lines: list[str] = []
+    error: str = ""
+
+    log_path = _unit_log_file(unit)
+    if log_path:
+        try:
+            combined: list[str] = []
+            # Include the most recent uncompressed rotated file (delaycompress),
+            # giving ~1-2 nights of history in the viewer.
+            rotated = sorted(log_path.parent.glob(
+                f"{log_path.name}-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
+            ))
+            if rotated:
+                combined += rotated[-1].read_text(errors="replace").splitlines()
+            combined += log_path.read_text(errors="replace").splitlines()
+            lines = combined[-n:]
+        except Exception as e:
+            error = str(e)
+    else:
+        try:
+            r = subprocess.run(
+                ["journalctl", "-u", unit, "-n", str(n), "--no-pager",
+                 "--output=short-iso", "--no-hostname"],
+                capture_output=True, text=True, timeout=8
+            )
+            lines = r.stdout.splitlines() if r.returncode == 0 else []
+            error = r.stderr.strip() if r.returncode != 0 else ""
+        except Exception as e:
+            error = str(e)
+
     return templates.TemplateResponse("partials/journal.html", {
         "request": request,
         "unit":    unit,

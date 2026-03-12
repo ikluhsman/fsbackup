@@ -156,7 +156,15 @@
     <div class="flex items-center justify-between px-4 py-2.5 border-b border-zinc-700 shrink-0">
       <span id="journal-modal-title" class="text-xs font-mono text-zinc-300"></span>
       <div class="flex items-center gap-3">
-        <span class="text-xs text-zinc-500">auto-refresh 3s</span>
+        <label for="journal-refresh-select" class="text-xs text-zinc-500">Refresh</label>
+        <select id="journal-refresh-select"
+                onchange="setJournalRefresh(this.value)"
+                class="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer">
+          <option value="0">Off</option>
+          <option value="5000">5s</option>
+          <option value="10000" selected>10s</option>
+          <option value="30000">30s</option>
+        </select>
         <button onclick="closeJournalModal()"
                 class="text-zinc-400 hover:text-white transition-colors text-lg leading-none">&times;</button>
       </div>
@@ -171,14 +179,44 @@
 <script>
 let _journalUnit = null;
 let _journalTimer = null;
+let _journalAtBottom = true;
+let _journalSavedScroll = null;
+
+const _journalBody = document.getElementById('journal-modal-body');
+
+_journalBody.addEventListener('htmx:beforeSwap', function() {
+  const pre = this.querySelector('pre');
+  if (!pre) return;
+  _journalAtBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+  _journalSavedScroll = _journalAtBottom ? null : pre.scrollTop;
+});
+
+_journalBody.addEventListener('htmx:afterSwap', function() {
+  const pre = this.querySelector('pre');
+  if (!pre) return;
+  if (_journalAtBottom) {
+    pre.scrollTop = pre.scrollHeight;
+  } else if (_journalSavedScroll !== null) {
+    pre.scrollTop = _journalSavedScroll;
+  }
+});
 
 function openJournalModal(unit) {
   _journalUnit = unit;
+  _journalAtBottom = true;
   document.getElementById('journal-modal-title').textContent = unit;
   document.getElementById('journal-modal').classList.remove('hidden');
   document.getElementById('journal-modal').classList.add('flex');
   loadJournal();
-  _journalTimer = setInterval(loadJournal, 3000);
+  const interval = parseInt(document.getElementById('journal-refresh-select').value, 10);
+  if (interval > 0) _journalTimer = setInterval(loadJournal, interval);
+}
+
+function setJournalRefresh(value) {
+  clearInterval(_journalTimer);
+  _journalTimer = null;
+  const interval = parseInt(value, 10);
+  if (interval > 0 && _journalUnit) _journalTimer = setInterval(loadJournal, interval);
 }
 
 function closeJournalModal() {
@@ -187,7 +225,7 @@ function closeJournalModal() {
   _journalUnit  = null;
   document.getElementById('journal-modal').classList.add('hidden');
   document.getElementById('journal-modal').classList.remove('flex');
-  document.getElementById('journal-modal-body').innerHTML = '<div class="text-zinc-500 text-xs font-mono p-4">Loading…</div>';
+  _journalBody.innerHTML = '<div class="text-zinc-500 text-xs font-mono p-4">Loading…</div>';
 }
 
 function loadJournal() {
@@ -198,7 +236,6 @@ function loadJournal() {
   });
 }
 
-// Close on Escape
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeJournalModal(); });
 </script>
 {% endblock %}
