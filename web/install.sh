@@ -190,7 +190,7 @@ echo
 SUPERCRONIC_BIN="/usr/local/bin/supercronic"
 SUPERCRONIC_VERSION="0.2.33"
 SUPERCRONIC_URL="https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64"
-SUPERCRONIC_SHA256="71b0d58cc53f76db3f6e0b71f4c6bc1a1a7c34fb15a6bb81fe2a5f3e571fab01"
+SUPERCRONIC_SHA256="feefa310da569c81b99e1027b86b27b51e6ee9ab647747b49099645120cfc671"
 CRONTAB_SRC="$SCRIPT_DIR/../conf/fsbackup.crontab"
 CRONTAB_DST="/etc/fsbackup/fsbackup.crontab"
 SCHEDULER_UNIT_SRC="$SCRIPT_DIR/../systemd/fsbackup-scheduler.service"
