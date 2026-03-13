@@ -5,5 +5,5 @@ pyyaml
 python-multipart
 boto3
 python-dotenv
-python-pam
+bcrypt
 itsdangerous

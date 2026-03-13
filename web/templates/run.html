@@ -4,10 +4,10 @@
 {% block content %}
 <div class="mb-6">
   <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Run Jobs</h1>
-  <p class="text-zinc-500 text-sm mt-1">Trigger systemd services manually</p>
+  <p class="text-zinc-500 text-sm mt-1">Trigger backup jobs manually</p>
 </div>
 
-<!-- Live status poller — updates all status badges every 3s via hx-swap-oob -->
+<!-- Live status poller — updates all status badges + output tails every 3s via hx-swap-oob -->
 <div hx-get="/api/run/status"
      hx-trigger="every 3s"
      hx-swap="none"
@@ -15,14 +15,14 @@
 
 {% macro badge(id, val) %}
   <span id="{{ id }}" class="inline-flex items-center gap-1 text-xs font-medium
-    {% if val == 'active' %}text-emerald-600 dark:text-emerald-400
+    {% if val in ('running', 'active', 'activating') %}text-amber-500 dark:text-amber-400
+    {% elif val == 'done' %}text-emerald-600 dark:text-emerald-400
     {% elif val == 'failed' %}text-red-500 dark:text-red-400
-    {% elif val == 'activating' %}text-amber-500 dark:text-amber-400
     {% else %}text-zinc-400{% endif %}">
     <span class="w-1.5 h-1.5 rounded-full
-      {% if val == 'active' %}bg-emerald-500
+      {% if val in ('running', 'active', 'activating') %}bg-amber-400 animate-pulse
+      {% elif val == 'done' %}bg-emerald-500
       {% elif val == 'failed' %}bg-red-500
-      {% elif val == 'activating' %}bg-amber-400 animate-pulse
       {% else %}bg-zinc-400{% endif %}"></span>
     {{ val }}
   </span>
@@ -57,6 +57,7 @@
       </div>
     </div>
     <div id="runner-result-{{ cls }}"></div>
+    <div id="tail-runner-{{ cls }}">{% if tails.get("runner-" ~ cls) %}<pre class="text-xs font-mono text-zinc-400 bg-zinc-950/60 rounded-lg p-2 mt-1 overflow-x-auto max-h-28 overflow-y-auto whitespace-pre-wrap break-all">{{ tails["runner-" ~ cls] | join('\n') | e }}</pre>{% endif %}</div>
 
     <!-- Runner journal -->
     <button type="button"
@@ -87,6 +88,7 @@
       </div>
     </div>
     <div id="doctor-result-{{ cls }}"></div>
+    <div id="tail-doctor-{{ cls }}">{% if tails.get("doctor-" ~ cls) %}<pre class="text-xs font-mono text-zinc-400 bg-zinc-950/60 rounded-lg p-2 mt-1 overflow-x-auto max-h-28 overflow-y-auto whitespace-pre-wrap break-all">{{ tails["doctor-" ~ cls] | join('\n') | e }}</pre>{% endif %}</div>
 
     <!-- Doctor journal -->
     <button type="button"
@@ -129,6 +131,7 @@
       </div>
     </div>
     <div id="result-{{ action }}" class="px-5 pb-1 empty:hidden"></div>
+    <div id="tail-{{ action }}" class="px-5">{% if tails.get(action) %}<pre class="text-xs font-mono text-zinc-400 bg-zinc-950/60 rounded-lg p-2 mt-1 mb-1 overflow-x-auto max-h-28 overflow-y-auto whitespace-pre-wrap break-all">{{ tails[action] | join('\n') | e }}</pre>{% endif %}</div>
     <div class="px-5 pb-3">
       <button type="button"
               onclick="openJournalModal('fsbackup-{{ action }}.service')"
@@ -140,11 +143,6 @@
   {% endfor %}
 
 </div>
-
-<p class="text-xs text-zinc-400 mt-4">
-  Starting a service requires that the web process can call <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">systemctl start</code>.
-  Ensure the appropriate sudoers entries are in place for the <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">fsbackup</code> user.
-</p>
 
 <!-- Journal modal -->
 <div id="journal-modal"

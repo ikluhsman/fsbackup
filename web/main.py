@@ -4,7 +4,9 @@
 import os
 import secrets
 import subprocess
+import threading
 import yaml
+from collections import deque
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -12,7 +14,6 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 import boto3
-import pam
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -29,6 +30,7 @@ from starlette.middleware.sessions import SessionMiddleware
 SNAPSHOT_ROOT = Path(os.environ.get("SNAPSHOT_ROOT", "/backup/snapshots"))
 MIRROR_ROOT   = Path(os.environ.get("MIRROR_ROOT",   "/backup2/snapshots"))
 TARGETS_FILE  = Path(os.environ.get("TARGETS_FILE",  "/etc/fsbackup/targets.yml"))
+SCRIPTS_DIR   = Path(os.environ.get("SCRIPTS_DIR",   "/opt/fsbackup"))
 
 # Retention policy (days) per tier — used to compute expiration dates
 RETENTION = {
@@ -63,8 +65,9 @@ def s3_client():
 # App
 # ---------------------------------------------------------------------------
 
-SECRET_KEY   = os.environ.get("SECRET_KEY", secrets.token_hex(32))
-AUTH_ENABLED = os.environ.get("AUTH_ENABLED", "true").lower() not in ("false", "0", "no")
+SECRET_KEY        = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+AUTH_ENABLED      = os.environ.get("AUTH_ENABLED", "true").lower() not in ("false", "0", "no")
+AUTH_PASSWORD_HASH = os.environ.get("AUTH_PASSWORD_HASH", "")
 
 app = FastAPI(title="fsbackup")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
@@ -182,16 +185,49 @@ def load_targets() -> dict:
         return {}
 
 
-def systemd_service_status(unit: str) -> str:
-    """Return active/inactive/failed for a systemd unit."""
-    try:
-        result = subprocess.run(
-            ["systemctl", "is-active", unit],
-            capture_output=True, text=True, timeout=5
-        )
-        return result.stdout.strip()
-    except Exception:
-        return "unknown"
+# ---------------------------------------------------------------------------
+# Job runner (Docker-compatible: direct subprocess, no systemd dependency)
+# ---------------------------------------------------------------------------
+
+def _build_job_commands() -> dict[str, list[str]]:
+    b = SCRIPTS_DIR / "bin"
+    s = SCRIPTS_DIR / "s3"
+    return {
+        "runner-class1": [str(b / "fs-runner.sh"), "daily",   "--class", "class1"],
+        "runner-class2": [str(b / "fs-runner.sh"), "daily",   "--class", "class2"],
+        "runner-class3": [str(b / "fs-runner.sh"), "monthly", "--class", "class3"],
+        "doctor-class1": [str(b / "fs-doctor.sh"), "--class", "class1"],
+        "doctor-class2": [str(b / "fs-doctor.sh"), "--class", "class2"],
+        "doctor-class3": [str(b / "fs-doctor.sh"), "--class", "class3"],
+        "promote":       [str(b / "fs-promote.sh")],
+        "mirror":        [str(b / "fs-mirror.sh"), "daily"],
+    }
+
+_JOB_COMMANDS = _build_job_commands()
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _stream_job(key: str, proc: subprocess.Popen) -> None:
+    """Background thread: drain proc stdout/stderr into the job's line buffer."""
+    job = _jobs[key]
+    for raw in proc.stdout:  # type: ignore[union-attr]
+        job["lines"].append(raw.rstrip("\n"))
+    proc.wait()
+    with _jobs_lock:
+        job["rc"]       = proc.returncode
+        job["status"]   = "done" if proc.returncode == 0 else "failed"
+        job["ended_at"] = datetime.now()
+
+
+def _job_status(key: str) -> str:
+    job = _jobs.get(key)
+    return job["status"] if job else "idle"
+
+
+def _job_tail(key: str) -> list[str]:
+    job = _jobs.get(key)
+    return list(job["lines"]) if job else []
 
 
 # ---------------------------------------------------------------------------
@@ -207,8 +243,14 @@ async def login_page(request: Request, next: str = "/"):
 
 @app.post("/login", response_class=HTMLResponse)
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...), next: str = Form(default="/")):
-    p = pam.pam()
-    if p.authenticate(username, password):
+    import bcrypt
+    ok = False
+    if AUTH_PASSWORD_HASH:
+        try:
+            ok = bcrypt.checkpw(password.encode(), AUTH_PASSWORD_HASH.encode())
+        except Exception:
+            ok = False
+    if ok:
         request.session["user"] = username
         return RedirectResponse(url=next or "/", status_code=302)
     return templates.TemplateResponse("login.html", {"request": request, "next": next, "error": "Invalid username or password."})
@@ -473,11 +515,12 @@ async def run_page(request: Request):
     units = {}
     for cls in CLASSES:
         units[cls] = {
-            "runner": systemd_service_status(f"fsbackup-runner@{cls}.service"),
-            "doctor": systemd_service_status(f"fsbackup-doctor@{cls}.service"),
+            "runner": _job_status(f"runner-{cls}"),
+            "doctor": _job_status(f"doctor-{cls}"),
         }
-    promote_status = systemd_service_status("fsbackup-promote.service")
-    mirror_status  = systemd_service_status("fsbackup-mirror-daily.service")
+    promote_status = _job_status("promote")
+    mirror_status  = _job_status("mirror")
+    tails = {key: _job_tail(key) for key in _JOB_COMMANDS}
 
     return templates.TemplateResponse("run.html", {
         "request":        request,
@@ -485,25 +528,28 @@ async def run_page(request: Request):
         "classes":        CLASSES,
         "promote_status": promote_status,
         "mirror_status":  mirror_status,
+        "tails":          tails,
     })
 
 
 @app.get("/api/run/status", response_class=HTMLResponse)
 async def api_run_status(request: Request):
-    """Return live status badges for all run-page units (HTMX polling target)."""
+    """Return live status badges + output tails for all run-page jobs (HTMX polling target)."""
     units = {}
     for cls in CLASSES:
         units[cls] = {
-            "runner": systemd_service_status(f"fsbackup-runner@{cls}.service"),
-            "doctor": systemd_service_status(f"fsbackup-doctor@{cls}.service"),
+            "runner": _job_status(f"runner-{cls}"),
+            "doctor": _job_status(f"doctor-{cls}"),
         }
-    promote_status = systemd_service_status("fsbackup-promote.service")
-    mirror_status  = systemd_service_status("fsbackup-mirror-daily.service")
+    promote_status = _job_status("promote")
+    mirror_status  = _job_status("mirror")
+    tails = {key: _job_tail(key) for key in _JOB_COMMANDS}
     return templates.TemplateResponse("partials/run_status.html", {
         "request":        request,
         "units":          units,
         "promote_status": promote_status,
         "mirror_status":  mirror_status,
+        "tails":          tails,
     })
 
 
@@ -709,43 +755,47 @@ async def api_journal(request: Request, unit: str, n: int = 200):
 @app.post("/api/run/{action}", response_class=HTMLResponse)
 async def api_run(request: Request, action: str, cls: str = Form(default="")):
     """
-    Trigger a systemd service. action: runner | doctor | promote | mirror
-    Returns an inline status badge for HTMX swap.
+    Trigger a backup job. action: runner | doctor | promote | mirror
+    Spawns the script directly as a subprocess; output streamed into an
+    in-memory deque visible via the status poller. No systemd dependency.
     """
-    unit_map = {
-        "runner":  f"fsbackup-runner@{cls}.service" if cls else None,
-        "doctor":  f"fsbackup-doctor@{cls}.service" if cls else None,
-        "promote": "fsbackup-promote.service",
-        "mirror":  "fsbackup-mirror-daily.service",
-    }
-    unit = unit_map.get(action)
+    key = f"{action}-{cls}" if cls else action
+    cmd = _JOB_COMMANDS.get(key)
     result_msg = ""
     result_ok  = False
 
-    if unit:
+    if not cmd:
+        result_msg = f"Unknown job: {key}"
+    elif _jobs.get(key, {}).get("status") == "running":
+        result_msg = f"{key} is already running"
+    else:
         try:
-            # --no-block: send start signal and return immediately without
-            # waiting for the service to reach active state. The 3s status
-            # poller on the Run page will reflect the transition.
-            cmd = ["systemctl", "start", "--no-block", unit]
-            if os.geteuid() != 0:
-                cmd = ["sudo"] + cmd
-            r = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
-                capture_output=True, text=True, timeout=5
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
             )
-            result_ok  = r.returncode == 0
-            result_msg = f"Started {unit}" if result_ok else r.stderr.strip()
+            with _jobs_lock:
+                _jobs[key] = {
+                    "status":     "running",
+                    "rc":         None,
+                    "started_at": datetime.now(),
+                    "ended_at":   None,
+                    "lines":      deque(maxlen=20),
+                }
+            threading.Thread(target=_stream_job, args=(key, proc), daemon=True).start()
+            result_ok  = True
+            result_msg = f"Started {key}"
         except Exception as e:
             result_msg = str(e)
-    else:
-        result_msg = f"Unknown action: {action}"
 
     return templates.TemplateResponse("partials/run_result.html", {
         "request":    request,
         "result_ok":  result_ok,
         "result_msg": result_msg,
-        "unit":       unit or action,
+        "unit":       key,
     })
 
 

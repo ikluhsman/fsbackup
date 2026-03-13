@@ -81,17 +81,6 @@ else
 fi
 echo
 
-# ---------------------------------------------------------------------------
-# 3c. shadow group (needed for PAM auth to read /etc/shadow)
-# ---------------------------------------------------------------------------
-if id -nG "$WEB_USER" | grep -qw shadow; then
-    ok "$WEB_USER is already in the shadow group"
-else
-    info "Adding $WEB_USER to the shadow group (needed for PAM authentication)..."
-    usermod -aG shadow "$WEB_USER"
-    ok "Added — service must be restarted for the new group to take effect"
-fi
-echo
 
 # ---------------------------------------------------------------------------
 # 3d. ACL on /etc/fsbackup/ (needed to write targets.yml from the web UI)
@@ -112,10 +101,20 @@ else
     info "Generating .env..."
     SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 
-    read -rp "Enable PAM authentication? [Y/n]: " AUTH_ANSWER
+    read -rp "Enable authentication? [Y/n]: " AUTH_ANSWER
     AUTH_ANSWER="${AUTH_ANSWER:-Y}"
+    AUTH_PASSWORD_HASH=""
     if [[ "${AUTH_ANSWER,,}" == "y" ]]; then
         AUTH_ENABLED=true
+        while true; do
+            read -rsp "Set UI password: " UI_PASSWORD; echo
+            [[ -n "$UI_PASSWORD" ]] && break
+            warn "Password cannot be empty"
+        done
+        AUTH_PASSWORD_HASH=$("$VENV/bin/python3" -c \
+            "import bcrypt, sys; print(bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt()).decode())" \
+            "$UI_PASSWORD")
+        ok "Password hash generated"
     else
         AUTH_ENABLED=false
         warn "Auth disabled — anyone on the network can access the UI"
@@ -132,6 +131,7 @@ HOST=$BIND_HOST
 PORT=$BIND_PORT
 
 AUTH_ENABLED=$AUTH_ENABLED
+AUTH_PASSWORD_HASH=$AUTH_PASSWORD_HASH
 SECRET_KEY=$SECRET
 
 SNAPSHOT_ROOT=/backup/snapshots
