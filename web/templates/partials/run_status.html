@@ -1,22 +1,30 @@
 {% macro badge_inner(val) %}
   <span class="inline-flex items-center gap-1 text-xs font-medium
-    {% if val == 'active' %}text-emerald-600 dark:text-emerald-400
+    {% if val in ('running', 'active', 'activating') %}text-amber-500 dark:text-amber-400
+    {% elif val == 'done' %}text-emerald-600 dark:text-emerald-400
     {% elif val == 'failed' %}text-red-500 dark:text-red-400
-    {% elif val == 'activating' %}text-amber-500 dark:text-amber-400
     {% else %}text-zinc-400{% endif %}">
     <span class="w-1.5 h-1.5 rounded-full
-      {% if val == 'active' %}bg-emerald-500
+      {% if val in ('running', 'active', 'activating') %}bg-amber-400 animate-pulse
+      {% elif val == 'done' %}bg-emerald-500
       {% elif val == 'failed' %}bg-red-500
-      {% elif val == 'activating' %}bg-amber-400 animate-pulse
       {% else %}bg-zinc-400{% endif %}"></span>
     {{ val }}
   </span>
 {% endmacro %}
 
+{% macro tail_div(id, lines) %}
+<div id="{{ id }}" hx-swap-oob="true">{% if lines %}<pre class="text-xs font-mono text-zinc-400 bg-zinc-950/60 rounded-lg p-2 mt-1 overflow-x-auto max-h-28 overflow-y-auto whitespace-pre-wrap break-all">{{ lines | join('\n') | e }}</pre>{% endif %}</div>
+{% endmacro %}
+
 {% for cls, statuses in units.items() %}
 <span id="status-runner-{{ cls }}" hx-swap-oob="true">{{ badge_inner(statuses.runner) }}</span>
 <span id="status-doctor-{{ cls }}" hx-swap-oob="true">{{ badge_inner(statuses.doctor) }}</span>
+{{ tail_div("tail-runner-" ~ cls, tails.get("runner-" ~ cls, [])) }}
+{{ tail_div("tail-doctor-" ~ cls, tails.get("doctor-" ~ cls, [])) }}
 {% endfor %}
 
 <span id="status-promote" hx-swap-oob="true">{{ badge_inner(promote_status) }}</span>
 <span id="status-mirror"  hx-swap-oob="true">{{ badge_inner(mirror_status) }}</span>
+{{ tail_div("tail-promote", tails.get("promote", [])) }}
+{{ tail_div("tail-mirror",  tails.get("mirror",  [])) }}

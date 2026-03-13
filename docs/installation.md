@@ -119,7 +119,7 @@ If you're also running the web UI under a separate user, pass `--web-user` to gr
 sudo /opt/fsbackup/utils/fs-nodeexp-fix.sh --web-user fsbackup
 ```
 
-The web UI `setup.sh` calls this automatically when the web user differs from `fsbackup`.
+The web UI `install.sh` calls this automatically when the web user differs from `fsbackup`.
 
 ---
 
