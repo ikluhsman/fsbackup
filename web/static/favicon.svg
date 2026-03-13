@@ -1,53 +1,96 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
 <defs>
-<radialGradient id="disc" cx="40%" cy="40%" r="70%">
+<radialGradient id="dg" cx="40%" cy="40%" r="70%">
 <stop offset="0%" stop-color="#4b4f55"/>
 <stop offset="60%" stop-color="#2f3338"/>
 <stop offset="100%" stop-color="#1b1e22"/>
 </radialGradient>
 </defs>
+<style>
+  /* Default / dark tabs: show orange disc, hide dark disc */
+  .dm { display: block; }
+  .lm { display: none; }
+  @media (prefers-color-scheme: light) {
+    .dm { display: none; }
+    .lm { display: block; }
+  }
+</style>
 
-<!-- Disc (no background rect — transparent outside disc) -->
-<circle cx="130" cy="128" r="92" fill="url(#disc)" stroke="#c9ccd1" stroke-width="3"/>
-
-<!-- Orange reflections -->
-<path d="M130 128 L70 60 A80 80 0 0 1 130 48 Z" fill="#ff9f2a" opacity=".45"/>
-<path d="M130 128 L200 70 A80 80 0 0 1 160 40 Z" fill="#ffc166" opacity=".35"/>
-<path d="M130 128 L190 180 A80 80 0 0 1 150 210 Z" fill="#ff7a18" opacity=".35"/>
-<path d="M130 128 L70 180 A80 80 0 0 1 50 140 Z" fill="#ffd9a0" opacity=".25"/>
-
-<!-- Hub -->
-<circle cx="130" cy="128" r="36" fill="#2c2f34"/>
-<circle cx="130" cy="128" r="24" fill="#9aa0a6"/>
-<circle cx="130" cy="128" r="10" fill="#1b1e22"/>
-
-<!-- Snowflake (white, always visible against the dark disc) -->
-<g transform="translate(214.64,169.4)" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none">
-  <line x1="0" y1="0" x2="29" y2="0"/>
-  <line x1="15.95" y1="0" x2="22.98" y2="-4.06"/>
-  <line x1="15.95" y1="0" x2="22.98" y2="4.06"/>
-  <line x1="0" y1="0" x2="14.5" y2="25.11"/>
-  <line x1="7.975" y1="13.81" x2="15.007" y2="17.87"/>
-  <line x1="7.975" y1="13.81" x2="7.975" y2="21.93"/>
-  <line x1="0" y1="0" x2="-14.5" y2="25.11"/>
-  <line x1="-7.975" y1="13.81" x2="-7.975" y2="21.93"/>
-  <line x1="-7.975" y1="13.81" x2="-15.007" y2="17.87"/>
-  <line x1="0" y1="0" x2="-29" y2="0"/>
-  <line x1="-15.95" y1="0" x2="-22.98" y2="4.06"/>
-  <line x1="-15.95" y1="0" x2="-22.98" y2="-4.06"/>
-  <line x1="0" y1="0" x2="-14.5" y2="-25.11"/>
-  <line x1="-7.975" y1="-13.81" x2="-15.007" y2="-17.87"/>
-  <line x1="-7.975" y1="-13.81" x2="-7.975" y2="-21.93"/>
-  <line x1="0" y1="0" x2="14.5" y2="-25.11"/>
-  <line x1="7.975" y1="-13.81" x2="7.975" y2="-21.93"/>
-  <line x1="7.975" y1="-13.81" x2="15.007" y2="-17.87"/>
+<!-- Dark tab variant: bright orange disc + white snowflake (stands out on dark tab bars) -->
+<g class="dm">
+  <circle cx="130" cy="128" r="92" fill="#f97316" stroke="#fed7aa" stroke-width="3"/>
+  <path d="M130 128 L70 60 A80 80 0 0 1 130 48 Z" fill="#ffffff" opacity=".2"/>
+  <path d="M130 128 L200 70 A80 80 0 0 1 160 40 Z" fill="#ffffff" opacity=".12"/>
+  <circle cx="130" cy="128" r="36" fill="#c2410c"/>
+  <circle cx="130" cy="128" r="24" fill="#fed7aa"/>
+  <circle cx="130" cy="128" r="10" fill="#7c2d12"/>
+  <g transform="translate(214.64,169.4)" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none">
+    <line x1="0" y1="0" x2="29" y2="0"/>
+    <line x1="15.95" y1="0" x2="22.98" y2="-4.06"/>
+    <line x1="15.95" y1="0" x2="22.98" y2="4.06"/>
+    <line x1="0" y1="0" x2="14.5" y2="25.11"/>
+    <line x1="7.975" y1="13.81" x2="15.007" y2="17.87"/>
+    <line x1="7.975" y1="13.81" x2="7.975" y2="21.93"/>
+    <line x1="0" y1="0" x2="-14.5" y2="25.11"/>
+    <line x1="-7.975" y1="13.81" x2="-7.975" y2="21.93"/>
+    <line x1="-7.975" y1="13.81" x2="-15.007" y2="17.87"/>
+    <line x1="0" y1="0" x2="-29" y2="0"/>
+    <line x1="-15.95" y1="0" x2="-22.98" y2="4.06"/>
+    <line x1="-15.95" y1="0" x2="-22.98" y2="-4.06"/>
+    <line x1="0" y1="0" x2="-14.5" y2="-25.11"/>
+    <line x1="-7.975" y1="-13.81" x2="-15.007" y2="-17.87"/>
+    <line x1="-7.975" y1="-13.81" x2="-7.975" y2="-21.93"/>
+    <line x1="0" y1="0" x2="14.5" y2="-25.11"/>
+    <line x1="7.975" y1="-13.81" x2="7.975" y2="-21.93"/>
+    <line x1="7.975" y1="-13.81" x2="15.007" y2="-17.87"/>
+  </g>
+  <g transform="translate(214.64,169.4)" fill="#ffffff">
+    <circle cx="29" cy="0" r="4.8"/>
+    <circle cx="14.5" cy="25.11" r="4.8"/>
+    <circle cx="-14.5" cy="25.11" r="4.8"/>
+    <circle cx="-29" cy="0" r="4.8"/>
+    <circle cx="-14.5" cy="-25.11" r="4.8"/>
+    <circle cx="14.5" cy="-25.11" r="4.8"/>
+  </g>
 </g>
-<g transform="translate(214.64,169.4)" fill="#ffffff">
-  <circle cx="29" cy="0" r="4.8"/>
-  <circle cx="14.5" cy="25.11" r="4.8"/>
-  <circle cx="-14.5" cy="25.11" r="4.8"/>
-  <circle cx="-29" cy="0" r="4.8"/>
-  <circle cx="-14.5" cy="-25.11" r="4.8"/>
-  <circle cx="14.5" cy="-25.11" r="4.8"/>
+
+<!-- Light tab variant: dark disc + dark navy snowflake (stands out on light tab bars) -->
+<g class="lm">
+  <circle cx="130" cy="128" r="92" fill="url(#dg)" stroke="#c9ccd1" stroke-width="3"/>
+  <path d="M130 128 L70 60 A80 80 0 0 1 130 48 Z" fill="#ff9f2a" opacity=".45"/>
+  <path d="M130 128 L200 70 A80 80 0 0 1 160 40 Z" fill="#ffc166" opacity=".35"/>
+  <path d="M130 128 L190 180 A80 80 0 0 1 150 210 Z" fill="#ff7a18" opacity=".35"/>
+  <path d="M130 128 L70 180 A80 80 0 0 1 50 140 Z" fill="#ffd9a0" opacity=".25"/>
+  <circle cx="130" cy="128" r="36" fill="#2c2f34"/>
+  <circle cx="130" cy="128" r="24" fill="#9aa0a6"/>
+  <circle cx="130" cy="128" r="10" fill="#1b1e22"/>
+  <g transform="translate(214.64,169.4)" stroke="#60a5fa" stroke-width="4" stroke-linecap="round" fill="none">
+    <line x1="0" y1="0" x2="29" y2="0"/>
+    <line x1="15.95" y1="0" x2="22.98" y2="-4.06"/>
+    <line x1="15.95" y1="0" x2="22.98" y2="4.06"/>
+    <line x1="0" y1="0" x2="14.5" y2="25.11"/>
+    <line x1="7.975" y1="13.81" x2="15.007" y2="17.87"/>
+    <line x1="7.975" y1="13.81" x2="7.975" y2="21.93"/>
+    <line x1="0" y1="0" x2="-14.5" y2="25.11"/>
+    <line x1="-7.975" y1="13.81" x2="-7.975" y2="21.93"/>
+    <line x1="-7.975" y1="13.81" x2="-15.007" y2="17.87"/>
+    <line x1="0" y1="0" x2="-29" y2="0"/>
+    <line x1="-15.95" y1="0" x2="-22.98" y2="4.06"/>
+    <line x1="-15.95" y1="0" x2="-22.98" y2="-4.06"/>
+    <line x1="0" y1="0" x2="-14.5" y2="-25.11"/>
+    <line x1="-7.975" y1="-13.81" x2="-15.007" y2="-17.87"/>
+    <line x1="-7.975" y1="-13.81" x2="-7.975" y2="-21.93"/>
+    <line x1="0" y1="0" x2="14.5" y2="-25.11"/>
+    <line x1="7.975" y1="-13.81" x2="7.975" y2="-21.93"/>
+    <line x1="7.975" y1="-13.81" x2="15.007" y2="-17.87"/>
+  </g>
+  <g transform="translate(214.64,169.4)" fill="#60a5fa">
+    <circle cx="29" cy="0" r="4.8"/>
+    <circle cx="14.5" cy="25.11" r="4.8"/>
+    <circle cx="-14.5" cy="25.11" r="4.8"/>
+    <circle cx="-29" cy="0" r="4.8"/>
+    <circle cx="-14.5" cy="-25.11" r="4.8"/>
+    <circle cx="14.5" cy="-25.11" r="4.8"/>
+  </g>
 </g>
 </svg>
