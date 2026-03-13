@@ -162,7 +162,7 @@ rsync `exclude` paths are **relative to the source path**, not the remote root.
 FastAPI + HTMX + Tailwind app running as the `fsbackup` user via `fsbackup-web.service`.
 
 - **Log viewer** (`/run` page): reads from log files in `/var/lib/fsbackup/log/`, not journalctl. Unit-to-log mapping is `_UNIT_LOG_MAP` in `web/main.py`. Includes the previous night's uncompressed rotated file (via `delaycompress` logrotate glob) to give ~1–2 nights of history.
-- **Required groups for `fsbackup` user**: `fsbackup`, `nodeexp_txt`, `dbexports`, `systemd-journal` (journal fallback). `web/setup.sh` handles all of these.
+- **Required groups for `fsbackup` user**: `fsbackup`, `nodeexp_txt`, `dbexports`, `systemd-journal` (journal fallback). `web/install.sh` handles all of these.
 - **Restart required** after any group membership change: `systemctl restart fsbackup-web.service`
 
 ## Git / Deployment

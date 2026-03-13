@@ -176,11 +176,11 @@ The `--reload` flag restarts on file changes — remove it in production.
 
 ## Setup
 
-Run `setup.sh` as root to configure permissions, generate `.env`, install
+Run `install.sh` as root to configure permissions, generate `.env`, install
 dependencies, and optionally install the systemd service:
 
 ```bash
-sudo bash /opt/fsbackup/web/setup.sh
+sudo bash /opt/fsbackup/web/install.sh
 ```
 
 The script will:
@@ -194,7 +194,7 @@ The script will:
 
 ## Permissions
 
-The `fsbackup` group covers the main paths the app needs. `setup.sh` handles
+The `fsbackup` group covers the main paths the app needs. `install.sh` handles
 this automatically. If you need to understand or redo it manually:
 
 | Path | Access needed | Covered by |
@@ -202,9 +202,9 @@ this automatically. If you need to understand or redo it manually:
 | `/backup/snapshots` | read + traverse | `fsbackup` group |
 | `/backup2/snapshots` | read + traverse | `fsbackup` group |
 | `/etc/fsbackup/` | read + traverse | `fsbackup` group |
-| `/var/lib/node_exporter/textfile_collector/` | read | ACL (set by setup.sh) |
-| `/var/lib/fsbackup/.aws/` | read | ACL (set by setup.sh) |
-| systemd journal | read | `systemd-journal` group (set by setup.sh) |
+| `/var/lib/node_exporter/textfile_collector/` | read | ACL (set by install.sh) |
+| `/var/lib/fsbackup/.aws/` | read | ACL (set by install.sh) |
+| systemd journal | read | `systemd-journal` group (set by install.sh) |
 
 The app sets `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` to point at
 `/var/lib/fsbackup/.aws/` at startup, so boto3 finds the `fsbackup` AWS profile
@@ -214,7 +214,7 @@ regardless of which user runs the process.
 
 ## Deploying as a systemd service
 
-The easiest way is to let `setup.sh` write and install the unit for you — it
+The easiest way is to let `install.sh` write and install the unit for you — it
 prompts during setup and uses the correct user, paths, and `.env` location.
 
 To do it manually, create `/etc/systemd/system/fsbackup-web.service`:
