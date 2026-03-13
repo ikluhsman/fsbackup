@@ -20,8 +20,25 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 echo
-echo "fsbackup web UI — setup"
+echo "fsbackup web UI — installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
+echo "This script will:"
+echo "  1. Ask which user will run the web UI"
+echo "  2. Add that user to the fsbackup and systemd-journal groups"
+echo "  3. Apply ACLs for Prometheus textfile dir and AWS credentials"
+echo "  4. Apply write ACL on /etc/fsbackup/ (for targets.yml editor)"
+echo "  5. Create a Python venv and install dependencies"
+echo "  6. Generate a web/.env with SECRET_KEY, auth password hash, and settings"
+echo "  7. Optionally download and install supercronic (replaces systemd timers)"
+echo "  8. Optionally install and enable the fsbackup-web systemd service"
+echo
+read -rp "Continue? [y/N]: " CONFIRM
+CONFIRM="${CONFIRM:-N}"
+if [[ "${CONFIRM,,}" != "y" ]]; then
+    echo "Aborted."
+    exit 0
+fi
 echo
 
 # ---------------------------------------------------------------------------
