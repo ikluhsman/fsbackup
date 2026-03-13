@@ -74,7 +74,7 @@ _PUBLIC_PATHS = {"/login"}
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
-    if AUTH_ENABLED and request.url.path not in _PUBLIC_PATHS and not request.session.get("user"):
+    if AUTH_ENABLED and request.url.path not in _PUBLIC_PATHS and not request.url.path.startswith("/static/") and not request.session.get("user"):
         return RedirectResponse(url=f"/login?next={request.url.path}", status_code=302)
     response = await call_next(request)
     return response
