@@ -1,0 +1,21 @@
+# Git
+.git/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+web/.venv/
+
+# Secrets and live configs (never bake into image)
+web/.env
+conf/targets.yml
+conf/fsbackup.conf
+**/*.key
+**/*.pem
+**/id_ed25519
+**/id_rsa
+
+# Editor noise
+.DS_Store
+**/*.swp
+**/*~

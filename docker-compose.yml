@@ -1,0 +1,32 @@
+services:
+  fsbackup:
+    build: .
+    image: fsbackup:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - web/.env
+
+    volumes:
+      # ── Primary snapshot storage ─────────────────────────────────────────
+      # Runner and mirror scripts write here. Must be bind-mounted from the host.
+      - /backup/snapshots:/backup/snapshots
+
+      # ── Mirror snapshot storage ──────────────────────────────────────────
+      - /backup2/snapshots:/backup2/snapshots
+
+      # ── Prometheus textfile collector ────────────────────────────────────
+      # Scripts emit .prom files here for node_exporter to scrape.
+      - /var/lib/node_exporter/textfile_collector:/var/lib/node_exporter/textfile_collector
+
+      # ── fsbackup config ──────────────────────────────────────────────────
+      # Contains: fsbackup.conf, targets.yml, age.pub, fsbackup.crontab,
+      #           ssh_config (optional), db/ (DB export env files)
+      - /etc/fsbackup:/etc/fsbackup
+
+      # ── fsbackup state ───────────────────────────────────────────────────
+      # Contains: .ssh/ (host keys + backup identity), .aws/ (credentials),
+      #           log/ (backup logs read by the web UI)
+      # On first run: populate .ssh/known_hosts and .ssh/id_ed25519 from host.
+      - /var/lib/fsbackup:/var/lib/fsbackup
