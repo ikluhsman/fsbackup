@@ -290,12 +290,60 @@ async def snapshots_page(
 
 
 @app.get("/targets", response_class=HTMLResponse)
-async def targets_page(request: Request):
+async def targets_page(request: Request, saved: str = ""):
     data = load_targets()
     return templates.TemplateResponse("targets.html", {
         "request": request,
         "targets": data,
+        "saved":   saved == "1",
     })
+
+
+@app.get("/targets/edit", response_class=HTMLResponse)
+async def targets_edit_page(request: Request):
+    try:
+        content = TARGETS_FILE.read_text()
+    except Exception as e:
+        content = f"# Could not read {TARGETS_FILE}: {e}\n"
+    return templates.TemplateResponse("targets_edit.html", {
+        "request": request,
+        "content": content,
+        "error":   "",
+    })
+
+
+@app.post("/targets/edit", response_class=HTMLResponse)
+async def targets_edit_submit(request: Request, content: str = Form(...)):
+    error = ""
+    try:
+        parsed = yaml.safe_load(content)
+        if parsed is not None and not isinstance(parsed, dict):
+            error = "Top-level structure must be a YAML mapping (class1/class2/class3 keys)."
+    except yaml.YAMLError as e:
+        # Extract line/column from the mark if available
+        mark = getattr(e, "problem_mark", None)
+        problem = getattr(e, "problem", None) or str(e)
+        if mark is not None:
+            error = f"Line {mark.line + 1}, column {mark.column + 1}: {problem}"
+        else:
+            error = str(e)
+
+    if not error:
+        tmp = TARGETS_FILE.with_suffix(".yml.tmp")
+        try:
+            tmp.write_text(content)
+            os.replace(tmp, TARGETS_FILE)
+        except Exception as e:
+            error = f"Failed to write file: {e}"
+
+    if error:
+        return templates.TemplateResponse("targets_edit.html", {
+            "request": request,
+            "content": content,
+            "error":   error,
+        })
+
+    return RedirectResponse(url="/targets?saved=1", status_code=303)
 
 
 @app.get("/browse", response_class=HTMLResponse)

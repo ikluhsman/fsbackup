@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Edit targets.yml — fsbackup{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-start justify-between">
+  <div>
+    <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Edit targets.yml</h1>
+    <p class="text-zinc-500 text-sm mt-1 font-mono">/etc/fsbackup/targets.yml</p>
+  </div>
+  <a href="/targets"
+     class="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1.5 transition-colors mt-1">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+    </svg>
+    Back to Targets
+  </a>
+</div>
+
+{% if error %}
+<div class="mb-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 flex gap-3 items-start">
+  <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+  </svg>
+  <div>
+    <p class="text-sm font-medium text-red-700 dark:text-red-400">Save failed — YAML is invalid</p>
+    <p class="text-sm text-red-600 dark:text-red-300 font-mono mt-1 whitespace-pre-wrap">{{ error }}</p>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" action="/targets/edit">
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+    <!-- Toolbar -->
+    <div class="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+      <div class="flex items-center gap-2 text-xs text-zinc-400 font-mono">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        targets.yml
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/targets"
+           class="px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">
+          Cancel
+        </a>
+        <button type="submit"
+                class="px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition-colors">
+          Save
+        </button>
+      </div>
+    </div>
+    <!-- Editor -->
+    <textarea
+      name="content"
+      class="w-full font-mono text-sm bg-zinc-950 text-zinc-100 p-4 focus:outline-none resize-none leading-relaxed"
+      style="height: calc(100vh - 18rem); tab-size: 2;"
+      spellcheck="false"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+    >{{ content }}</textarea>
+  </div>
+</form>
+{% endblock %}
