@@ -1,0 +1,49 @@
+# fsbackup scheduler crontab
+# Used by supercronic (local install: via fsbackup-scheduler.service; Docker: directly)
+# Format: minute hour day month weekday command
+# All times local. Matches the schedule previously defined in systemd timer units.
+
+# Logrotate health metric (daily 00:30)
+30 0 * * * /opt/fsbackup/bin/fs-logrotate-metric.sh
+
+# Doctor class1 (daily 01:15)
+15 1 * * * /opt/fsbackup/bin/fs-doctor.sh --class class1
+
+# DB export: paperlessngx (daily 01:40)
+40 1 * * * /opt/fsbackup/bin/fs-db-export.sh /etc/fsbackup/db/paperlessngx.env
+
+# Runner class1 (daily 01:45)
+45 1 * * * /opt/fsbackup/bin/fs-runner.sh daily --class class1
+
+# Doctor class2 (daily 02:05)
+5 2 * * * /opt/fsbackup/bin/fs-doctor.sh --class class2
+
+# Runner class2 (daily 02:15)
+15 2 * * * /opt/fsbackup/bin/fs-runner.sh daily --class class2
+
+# Mirror daily pass (daily 02:30)
+30 2 * * * /opt/fsbackup/bin/fs-mirror.sh daily
+
+# Retention (daily 03:00)
+0 3 * * * /opt/fsbackup/bin/fs-retention.sh
+
+# Promote daily->weekly/monthly (daily 03:30)
+30 3 * * * /opt/fsbackup/bin/fs-promote.sh
+
+# Mirror promote pass (daily 03:40)
+40 3 * * * /opt/fsbackup/bin/fs-mirror.sh promote
+
+# Mirror retention (daily 04:00)
+0 4 * * * /opt/fsbackup/bin/fs-mirror-retention.sh
+
+# Doctor class3 (1st of month 04:15)
+15 4 1 * * /opt/fsbackup/bin/fs-doctor.sh --class class3
+
+# S3 export (daily 04:30)
+30 4 * * * /opt/fsbackup/s3/fs-export-s3.sh
+
+# Runner class3 / monthly photos (1st of month 04:45)
+45 4 1 * * /opt/fsbackup/bin/fs-runner.sh monthly --class class3
+
+# Annual promote: monthly Dec -> annual (Jan 5 03:00)
+0 3 5 1 * /opt/fsbackup/bin/fs-annual-promote.sh

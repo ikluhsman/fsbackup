@@ -168,7 +168,64 @@ ok "Dependencies installed"
 echo
 
 # ---------------------------------------------------------------------------
-# 6. Systemd unit (optional)
+# 6. Supercronic scheduler (replaces systemd timers)
+# ---------------------------------------------------------------------------
+SUPERCRONIC_BIN="/usr/local/bin/supercronic"
+SUPERCRONIC_VERSION="0.2.33"
+SUPERCRONIC_URL="https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64"
+SUPERCRONIC_SHA256="71b0d58cc53f76db3f6e0b71f4c6bc1a1a7c34fb15a6bb81fe2a5f3e571fab01"
+CRONTAB_SRC="$SCRIPT_DIR/../conf/fsbackup.crontab"
+CRONTAB_DST="/etc/fsbackup/fsbackup.crontab"
+SCHEDULER_UNIT_SRC="$SCRIPT_DIR/../systemd/fsbackup-scheduler.service"
+SCHEDULER_UNIT_DST="/etc/systemd/system/fsbackup-scheduler.service"
+
+read -rp "Install supercronic scheduler? [y/N]: " INSTALL_SCHEDULER
+INSTALL_SCHEDULER="${INSTALL_SCHEDULER:-N}"
+
+if [[ "${INSTALL_SCHEDULER,,}" == "y" ]]; then
+    # Install supercronic binary
+    if [[ -f "$SUPERCRONIC_BIN" ]]; then
+        ok "supercronic already installed at $SUPERCRONIC_BIN"
+    else
+        info "Downloading supercronic v${SUPERCRONIC_VERSION}..."
+        curl -fsSL "$SUPERCRONIC_URL" -o "$SUPERCRONIC_BIN" || die "Failed to download supercronic"
+        echo "$SUPERCRONIC_SHA256  $SUPERCRONIC_BIN" | sha256sum -c - || {
+            rm -f "$SUPERCRONIC_BIN"
+            die "supercronic checksum mismatch — binary removed"
+        }
+        chmod +x "$SUPERCRONIC_BIN"
+        ok "supercronic installed at $SUPERCRONIC_BIN"
+    fi
+
+    # Deploy crontab
+    info "Deploying crontab to $CRONTAB_DST..."
+    cp "$CRONTAB_SRC" "$CRONTAB_DST"
+    ok "Crontab deployed"
+
+    # Install scheduler service
+    info "Installing fsbackup-scheduler.service..."
+    cp "$SCHEDULER_UNIT_SRC" "$SCHEDULER_UNIT_DST"
+    systemctl daemon-reload
+
+    read -rp "Disable legacy systemd timers and enable scheduler now? [y/N]: " MIGRATE_TIMERS
+    MIGRATE_TIMERS="${MIGRATE_TIMERS:-N}"
+    if [[ "${MIGRATE_TIMERS,,}" == "y" ]]; then
+        info "Stopping and disabling fsbackup timers..."
+        systemctl stop 'fsbackup-*.timer' 'fs-db-export@*.timer' 2>/dev/null || true
+        systemctl disable 'fsbackup-*.timer' 'fs-db-export@*.timer' 2>/dev/null || true
+        ok "Timers disabled"
+        systemctl enable --now fsbackup-scheduler.service
+        ok "fsbackup-scheduler.service enabled and started"
+        systemctl status fsbackup-scheduler.service --no-pager -l | head -10
+    else
+        ok "Scheduler unit installed — enable with: systemctl enable --now fsbackup-scheduler.service"
+        warn "Remember to disable legacy timers before enabling the scheduler to avoid double-runs"
+    fi
+fi
+echo
+
+# ---------------------------------------------------------------------------
+# 7. Systemd unit (optional)
 # ---------------------------------------------------------------------------
 UNIT_SRC="$SCRIPT_DIR/../systemd/fsbackup-web.service"
 UNIT_DST="/etc/systemd/system/fsbackup-web.service"
