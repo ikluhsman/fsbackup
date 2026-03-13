@@ -169,12 +169,21 @@ for t in "${TARGETS[@]}"; do
   [[ -n "$rsync_opts" ]] && RSYNC_CMD+=($rsync_opts)
 
   RSYNC_STATS_TMP="$(mktemp)"
+  RSYNC_ERR_TMP="$(mktemp)"
   if is_local_host "$host"; then
-    "${RSYNC_CMD[@]}" "${src%/}/" "$DEST/" | tee "$RSYNC_STATS_TMP"
+    "${RSYNC_CMD[@]}" "${src%/}/" "$DEST/" 2>"$RSYNC_ERR_TMP" | tee "$RSYNC_STATS_TMP"
   else
-    "${RSYNC_CMD[@]}" "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/" | tee "$RSYNC_STATS_TMP"
+    "${RSYNC_CMD[@]}" "${BACKUP_SSH_USER}@${host}:${src%/}/" "$DEST/" 2>"$RSYNC_ERR_TMP" | tee "$RSYNC_STATS_TMP"
   fi
   rc=${PIPESTATUS[0]}
+
+  # Log any rsync stderr output so errors appear in backup.log
+  if [[ -s "$RSYNC_ERR_TMP" ]]; then
+    while IFS= read -r errline; do
+      log "$id" "rsync: $errline"
+    done < "$RSYNC_ERR_TMP"
+  fi
+  rm -f "$RSYNC_ERR_TMP"
 
   if [[ $rc -eq 0 ]]; then
     ((SUCCEEDED++))
