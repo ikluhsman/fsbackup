@@ -1,0 +1,51 @@
+services:
+  fsbackup:
+    # Build locally:  docker build -t fsbackup:latest .
+    # Or pull from a private registry:
+    image: your-registry/fsbackup:latest
+    restart: unless-stopped
+
+    # Match the UID/GID of the fsbackup user on the host.
+    # Check with: id fsbackup
+    user: "993:993"
+
+    ports:
+      # HOST_PORT:CONTAINER_PORT
+      # Container always binds on 8080 (set HOST=0.0.0.0, PORT=8080 in web/.env)
+      - "8080:8080"
+
+    env_file:
+      # Copy web/.env.example → web/.env and fill in your values before starting.
+      - web/.env
+
+    volumes:
+      # ── Primary snapshot storage ─────────────────────────────────────────────
+      # rsync writes daily/weekly/monthly/annual snapshots here.
+      - /your/primary/backup/drive/snapshots:/backup/snapshots
+
+      # ── Mirror snapshot storage ──────────────────────────────────────────────
+      # fs-mirror.sh copies snapshots here. Remove if you have no second drive.
+      - /your/mirror/backup/drive/snapshots:/backup2/snapshots
+
+      # ── Prometheus textfile collector ────────────────────────────────────────
+      # Backup scripts emit .prom files here for node_exporter to scrape.
+      # Remove if you are not running node_exporter.
+      - /var/lib/node_exporter/textfile_collector:/var/lib/node_exporter/textfile_collector
+
+      # ── fsbackup config ──────────────────────────────────────────────────────
+      # Must contain:
+      #   fsbackup.conf      — SNAPSHOT_ROOT, SNAPSHOT_MIRROR_ROOT, etc.
+      #   targets.yml        — backup targets (see conf/targets.yml.example)
+      #   fsbackup.crontab   — job schedule (copy from conf/fsbackup.crontab)
+      #   age.pub            — age public key for S3 encryption
+      #   db/                — DB export env files (one per database)
+      - /etc/fsbackup:/etc/fsbackup
+
+      # ── fsbackup state ───────────────────────────────────────────────────────
+      # Must contain:
+      #   .ssh/id_ed25519    — SSH private key used to connect to backup targets
+      #   .ssh/known_hosts   — pre-seeded with target host keys (see fs-trust-host.sh)
+      #   .aws/credentials   — AWS credentials for S3 export (profile: fsbackup)
+      #   .aws/config        — AWS region config
+      # log/ is written by backup scripts and read by the web UI.
+      - /var/lib/fsbackup:/var/lib/fsbackup
