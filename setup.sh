@@ -27,6 +27,10 @@ NODE_EXPORTER_TEXTFILE="/var/lib/node_exporter/textfile_collector"
 
 UPDATE=0
 
+SUPERCRONIC_VERSION="0.2.33"
+SUPERCRONIC_SHA256="feefa310da569c81b99e1027b86b27b51e6ee9ab647747b49099645120cfc671"
+SUPERCRONIC_BIN="/usr/local/bin/supercronic"
+
 BOOTSTRAP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_BIN_DIR="${BOOTSTRAP_DIR}/bin"
 
@@ -67,6 +71,21 @@ mountpoint -q "$BACKUP_ROOT" || { echo "ERROR: $BACKUP_ROOT is not mounted"; exi
 
 command -v yq >/dev/null || { echo "ERROR: yq v4 required"; exit 1; }
 command -v jq >/dev/null || { echo "ERROR: jq required"; exit 1; }
+
+# -----------------------------
+# supercronic (idempotent)
+# -----------------------------
+if [[ ! -x "$SUPERCRONIC_BIN" ]]; then
+  echo "Installing supercronic v${SUPERCRONIC_VERSION}..."
+  curl -fsSL \
+    "https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+    -o "$SUPERCRONIC_BIN"
+  echo "${SUPERCRONIC_SHA256}  ${SUPERCRONIC_BIN}" | sha256sum -c -
+  chmod +x "$SUPERCRONIC_BIN"
+  echo "supercronic installed."
+else
+  echo "supercronic already installed, skipping."
+fi
 
 # -----------------------------
 # User & group
