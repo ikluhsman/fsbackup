@@ -79,7 +79,6 @@ class3 is excluded from mirroring (`MIRROR_SKIP_CLASSES`). Only class1 gets annu
 | `fs-mirror.sh` | `bin/` | supercronic |
 | `fs-mirror-retention.sh` | `bin/` | supercronic |
 | `fs-db-export.sh` | `bin/` | supercronic |
-| `fs-logrotate-metric.sh` | `bin/` | supercronic |
 | `fs-restore.sh` | `utils/` | manual only |
 | `fs-trust-host.sh` | `utils/` | manual only (works as root or fsbackup user) |
 | `fs-nodeexp-fix.sh` | `utils/` | manual only |
@@ -94,15 +93,15 @@ class3 is excluded from mirroring (`MIRROR_SKIP_CLASSES`). Only class1 gets annu
 
 ## Docker Deployment
 
-Live stack runs from `/docker/stacks/fsbackup/docker-compose.yml`. Image: `registry.kluhsman.com/fsbackup:vX.Y.Z`.
+Live stack runs from `/docker/stacks/fsbackup/docker-compose.yml`. Image: `ghcr.io/fsbackup/fsbackup`.
 
 ### Build & push
+Images are published automatically to `ghcr.io/fsbackup/fsbackup` via GitHub Actions when a version tag is pushed:
 ```bash
-cd /home/crash/fsbackup
-docker build -t registry.kluhsman.com/fsbackup:vX.Y.Z -t registry.kluhsman.com/fsbackup:latest .
-docker push registry.kluhsman.com/fsbackup:vX.Y.Z
-docker push registry.kluhsman.com/fsbackup:latest
+git tag -a v0.9.2 -m "v0.9.2 — description"
+git push origin v0.9.2
 ```
+To build locally: `docker build -t fsbackup:latest .`
 
 ### Key compose settings
 - `user: "993:993"` — must match fsbackup UID/GID on host
@@ -201,9 +200,12 @@ FastAPI + HTMX + Tailwind. Deployed via Docker (uvicorn inside container).
 
 - Working repo: `/home/crash/fsbackup` (owned `crash:crash`, scripts `755`)
 - Live stack: `/docker/stacks/fsbackup/docker-compose.yml`
-- Bare remote: `/var/www/src/fsbackup.git` (served via Apache mod_git)
+- Remote: `git@github.com:fsbackup/fsbackup.git` (public, under fsbackup org)
+- Docs site repo: `github.com/fsbackup/fsbackup-docs` (Nuxt 4, domain: fsbackup.org)
 - `conf/targets.yml` is gitignored — never commit it
 - `conf/grafana-dashboard.json` has instance-specific datasource UID; importers must remap
+- Version tags (`v*.*.*`) trigger GitHub Actions to build and push to `ghcr.io/fsbackup/fsbackup`
+- Current release: `v0.9.1`
 
 ## Host Networking — Linux 6.8 FIB Exception Bug
 
