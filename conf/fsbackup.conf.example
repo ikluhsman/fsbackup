@@ -1,8 +1,18 @@
 SNAPSHOT_ROOT="/backup/snapshots"
 SNAPSHOT_MIRROR_ROOT="/backup2/snapshots"
-MIRROR_SKIP_CLASSES="class3"
 
-# S3 export (Phase 6) — set these to enable fs-export-s3.sh
+# Space-separated list of classes to exclude from mirroring to SNAPSHOT_MIRROR_ROOT.
+# Leave empty (or omit) to mirror all classes.
+# Example: exclude class3 (large archives) to save space on the secondary drive.
+# MIRROR_SKIP_CLASSES="class3"
+MIRROR_SKIP_CLASSES=""
+
+# S3 export — set these to enable fs-export-s3.sh
 S3_BUCKET="fsbackup-snapshots-XXXXXX"
-S3_SKIP_CLASSES="class3"
+
+# Space-separated list of classes to exclude from S3 export.
+# Leave empty to upload all classes.
+# S3_SKIP_CLASSES="class3"
+S3_SKIP_CLASSES=""
+
 # S3_AWS_PROFILE="fsbackup"    # defaults to fsbackup if unset

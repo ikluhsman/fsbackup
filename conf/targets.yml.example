@@ -127,20 +127,21 @@ class2:
 
 
 class3:
-  # class3: large archives — monthly snapshots only
-  # NOT mirrored to /backup2 (see MIRROR_SKIP_CLASSES in fsbackup.conf)
+  # class3: large archives (photos, video libraries, media collections, etc.)
+  # Monthly snapshots only — designed for data that changes infrequently.
+  # Mirroring is optional: add class3 to MIRROR_SKIP_CLASSES in fsbackup.conf to exclude it.
   # Offsite: M-DISC annually, USB external monthly (manual)
 
   # =============
   # local (backup server)
   # =============
 
-  - id: pictures.photos
+  - id: archives.photos
     host: fs
     source: /share/pictures/photos
     type: dir
 
-  - id: pictures.raw
+  - id: archives.raw
     host: fs
     source: /share/pictures/raw
     type: dir
