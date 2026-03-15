@@ -42,7 +42,7 @@
 # S3 export (daily 04:30)
 30 4 * * * /opt/fsbackup/s3/fs-export-s3.sh
 
-# Runner class3 / monthly photos (1st of month 04:45)
+# Runner class3 / monthly archives (1st of month 04:45)
 45 4 1 * * /opt/fsbackup/bin/fs-runner.sh monthly --class class3
 
 # Annual promote: monthly Dec -> annual (Jan 5 03:00)

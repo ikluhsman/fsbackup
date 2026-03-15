@@ -61,9 +61,9 @@ Scripts source this with: `. /etc/fsbackup/fsbackup.conf`
 |-------|-------------|----------|
 | class1 | Application data, personal files, DBs | Daily |
 | class2 | Infrastructure config (docker stacks, nginx, bind, etc.) | Daily |
-| class3 | Photo snapshots from /share/pictures | Monthly (1st of month) |
+| class3 | Large archives (photos, video libraries, media collections, etc.) | Monthly (1st of month) |
 
-class3 is excluded from mirroring (`MIRROR_SKIP_CLASSES`). Only class1 gets annual snapshots.
+class3 mirroring is optional — controlled by `MIRROR_SKIP_CLASSES` in `fsbackup.conf`. Set to `"class3"` to exclude from mirroring, or leave empty to mirror everything. Only class1 gets annual snapshots.
 
 ---
 
