@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # =============================================================================
-# fsbackup_bootstrap.sh
+# install.sh
 #
-# Idempotent bootstrap + updater for fsbackup system.
+# Idempotent bootstrap + installer for fsbackup system.
 # Safe to re-run at any time.
 #
 # Usage:
-#   fsbackup_bootstrap.sh [--update]
+#   install.sh [--update]
 #     [--backup-root /backup]
 # =============================================================================
 
@@ -210,4 +210,14 @@ echo "SSH public key to install on source hosts:"
 echo "  ${SSH_KEY_PATH}.pub"
 echo
 echo "Safe to re-run at any time."
+echo
+
+# -----------------------------
+# Optional: web UI setup
+# -----------------------------
+read -rp "Set up the web UI now? [y/N]: " INSTALL_WEB
+INSTALL_WEB="${INSTALL_WEB:-N}"
+if [[ "${INSTALL_WEB,,}" == "y" ]]; then
+  bash "${BOOTSTRAP_DIR}/web/install.sh"
+fi
 
