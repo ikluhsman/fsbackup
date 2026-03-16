@@ -205,7 +205,7 @@ FastAPI + HTMX + Tailwind. Deployed via Docker (uvicorn inside container).
 - `conf/targets.yml` is gitignored — never commit it
 - `conf/grafana-dashboard.json` has instance-specific datasource UID; importers must remap
 - Version tags (`v*.*.*`) trigger GitHub Actions to build and push to `ghcr.io/fsbackup/fsbackup`
-- Current release: `v1.0.0`
+- current release is v1.0.2
 
 ## Host Networking — Linux 6.8 FIB Exception Bug
 
