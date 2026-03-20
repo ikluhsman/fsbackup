@@ -28,15 +28,17 @@ web/
   .env.example         # Configuration template (copy to .env)
   static/              # Static assets (currently empty; Tailwind and HTMX are CDN)
   templates/
-    base.html          # Shared layout: sidebar nav, dark/light toggle, CDN scripts
-    index.html         # Dashboard
-    snapshots.html     # Snapshot browser with live HTMX filters
-    targets.html       # targets.yml viewer
-    browse.html        # Filesystem browser inside a snapshot
-    restore.html       # Restore form
-    run.html           # Trigger systemd services
-    s3.html            # S3 offsite bucket browser
-    utilities.html     # Admin CLI tool reference cards
+    base.html            # Shared layout: sidebar nav, dark/light toggle, CDN scripts
+    index.html           # Dashboard
+    snapshots.html       # Snapshot browser with live HTMX filters
+    targets.html         # targets.yml viewer (also accessible via Configuration > Targets)
+    targets_edit.html    # Raw targets.yml editor
+    browse.html          # Filesystem browser inside a snapshot
+    restore.html         # Restore form
+    run.html             # Trigger runner/doctor/promote/mirror jobs
+    s3.html              # S3 offsite bucket browser
+    configuration.html   # Tabbed configuration page (Hosts, Targets, Schedule, Volumes)
+    utilities.html       # Stub — redirects to Configuration and Restore
     partials/
       snapshot_rows.html   # HTMX swap target: snapshot table body
       dir_entries.html     # HTMX swap target: directory listing rows
@@ -64,12 +66,23 @@ step and no Node.js requirement.
 |-------|------|-------------|
 | `GET /` | Dashboard | Class status cards read from `.prom` metric files |
 | `GET /snapshots` | Snapshots | Filterable table of all local snapshots; defaults to daily tier + today |
-| `GET /targets` | Targets | Parsed view of `/etc/fsbackup/targets.yml`, grouped by class |
-| `GET /browse` | Browse | Directory tree walker inside a snapshot path |
 | `GET /restore` | Restore | Restore form with recent-snapshot quick-select sidebar |
 | `GET /run` | Run | Trigger runner/doctor per class, promote, mirror |
 | `GET /s3` | S3 Offsite | Prefix-based S3 bucket browser with presigned download |
-| `GET /utilities` | Utilities | Reference cards for admin CLI tools (trust-host, rename, restore, etc.) |
+| `GET /configuration` | Configuration | Tabbed page: Hosts, Targets, Schedule, Volumes & Maintenance |
+| `GET /targets` | Targets | Parsed view of `/etc/fsbackup/targets.yml` (also in Configuration > Targets tab) |
+| `GET /targets/edit` | Edit Targets | Raw `targets.yml` editor |
+| `GET /browse` | Browse | Directory tree walker inside a snapshot path (linked from Snapshots page) |
+| `GET /utilities` | Utilities | Stub page — redirects to Configuration and Restore |
+
+### Configuration page tabs
+
+| Tab | Description |
+|-----|-------------|
+| Hosts | Lists all unique hosts from `targets.yml`; instructions for trusting a new host's SSH key via `fs-trust-host.sh` |
+| Targets | Targets table grouped by class; link to edit `targets.yml`; rename instructions via `fs-target-rename.sh` |
+| Schedule | Read-only view of all jobs in `fsbackup.crontab` with human-readable labels and cron expressions |
+| Volumes & Maintenance | Disk usage for `/backup` and `/backup2`; annual mirror check instructions; node exporter troubleshooting |
 
 ### HTMX partial endpoints
 
@@ -150,6 +163,7 @@ running under systemd, you can use `EnvironmentFile=` in the unit file instead.
 | `S3_PROFILE` | `fsbackup` | AWS credentials profile name |
 | `S3_REGION` | `us-west-2` | AWS region |
 | `PRESIGN_TTL` | `3600` | Presigned download URL expiry (seconds) |
+| `CRONTAB_FILE` | `/etc/fsbackup/fsbackup.crontab` | Crontab file displayed on Configuration > Schedule tab |
 
 > `HOST` and `PORT` are read by the `if __name__ == "__main__"` entrypoint in
 > `main.py`. If you start the app via `uvicorn main:app` directly on the command
@@ -261,8 +275,9 @@ avoid a flash.
 - **New HTMX partial**: add a `GET /api/...` route returning a
   `TemplateResponse("partials/<name>.html", ...)`, target it with `hx-get` and
   `hx-target` in the calling template.
-- **New utility**: add a card to `utilities.html` and a `POST /api/run/<action>`
-  handler that calls the relevant script in `utils/`.
+- **New utility or maintenance tool**: add a card or section to the appropriate
+  tab in `configuration.html`, and a `POST /api/run/<action>` handler in `main.py`
+  that calls the relevant script in `utils/`.
 
 ---
 
