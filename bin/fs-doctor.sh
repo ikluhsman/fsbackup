@@ -131,7 +131,7 @@ scan_root() {
 
   [[ -d "$root" ]] || return 0
 
-  find "$root" -mindepth 3 -maxdepth 4 -type d | while read -r d; do
+  while read -r d; do
     target="$(basename "$d")"
     class="$(basename "$(dirname "$d")")"
     tier="$(basename "$(dirname "$(dirname "$d")")")"
@@ -141,7 +141,7 @@ scan_root() {
       ORPHANS["$label"]=$((ORPHANS["$label"] + 1))
       echo "$(date -Is) root=${label} tier=${tier} date=${date} class=${class} orphan=${target}" >>"$ORPHAN_LOG"
     fi
-  done
+  done < <(find "$root" -mindepth 3 -maxdepth 4 -type d)
 }
 
 scan_root "$PRIMARY_SNAPSHOT_ROOT" "primary"
@@ -171,13 +171,13 @@ check_annual() {
   local annual_root="${root}/annual"
   [[ -d "$annual_root" ]] || return 0
 
-  find "$annual_root" -type d | while read -r d; do
+  while read -r d; do
     if [[ -w "$d" ]]; then
       echo "$(date -Is) root=${label} writable=${d}" >>"$IMMUTABLE_LOG"
       [[ "$label" == "primary" ]] && PRIMARY_IMMUTABLE=0
       [[ "$label" == "mirror" ]] && MIRROR_IMMUTABLE=0
     fi
-  done
+  done < <(find "$annual_root" -type d)
 }
 
 check_annual "$PRIMARY_SNAPSHOT_ROOT" "primary"
