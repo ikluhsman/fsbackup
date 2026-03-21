@@ -32,6 +32,7 @@ MIRROR_ROOT   = Path(os.environ.get("MIRROR_ROOT",   "/backup2/snapshots"))
 TARGETS_FILE  = Path(os.environ.get("TARGETS_FILE",  "/etc/fsbackup/targets.yml"))
 SCRIPTS_DIR   = Path(os.environ.get("SCRIPTS_DIR",   "/opt/fsbackup"))
 CRONTAB_FILE  = Path(os.environ.get("CRONTAB_FILE",  "/etc/fsbackup/fsbackup.crontab"))
+PROM_DIR      = Path(os.environ.get("PROM_DIR",      "/var/lib/node_exporter/textfile_collector"))
 
 # Retention policy (days) per tier — used to compute expiration dates
 RETENTION = {
@@ -560,6 +561,77 @@ async def utilities_page(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Logs page
+# ---------------------------------------------------------------------------
+
+# Log sections shown on /logs — (unit_key, label, description)
+_LOG_SECTIONS = [
+    ("fsbackup-runner@class1.service",      "Backup — class1",       "backup.log"),
+    ("fsbackup-runner@class2.service",      "Backup — class2",       "backup.log"),
+    ("fsbackup-runner@class3.service",      "Backup — class3",       "backup.log"),
+    ("fsbackup-mirror-daily.service",       "Mirror (daily)",        "mirror.log"),
+    ("fsbackup-mirror-retention.service",   "Mirror retention",      "mirror-retention.log"),
+    ("fsbackup-s3-export.service",          "S3 export",             "s3-export.log"),
+    ("fsbackup-orphans",                    "Orphan scan",           "fs-orphans.log"),
+    ("fsbackup-annual-promote.service",     "Annual promote",        "annual-promote.log"),
+]
+
+
+def _parse_prom_files() -> list[dict]:
+    """Read all fsbackup*.prom files and return parsed metric rows."""
+    rows: list[dict] = []
+    try:
+        prom_files = sorted(PROM_DIR.glob("fsbackup*.prom"))
+    except Exception:
+        return rows
+
+    for pf in prom_files:
+        try:
+            text = pf.read_text(errors="replace")
+        except Exception:
+            continue
+        help_map: dict[str, str] = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("# HELP"):
+                parts = line.split(None, 3)
+                if len(parts) == 4:
+                    help_map[parts[2]] = parts[3]
+            elif line and not line.startswith("#"):
+                # metric{labels} value [timestamp]
+                parts = line.split()
+                if not parts:
+                    continue
+                raw_name = parts[0]
+                value    = parts[1] if len(parts) > 1 else ""
+                # split name and labels
+                if "{" in raw_name:
+                    metric_name = raw_name[:raw_name.index("{")]
+                    labels_str  = raw_name[raw_name.index("{")+1:raw_name.rindex("}")]
+                else:
+                    metric_name = raw_name
+                    labels_str  = ""
+                rows.append({
+                    "metric":  metric_name,
+                    "labels":  labels_str,
+                    "value":   value,
+                    "help":    help_map.get(metric_name, ""),
+                    "file":    pf.name,
+                })
+    return rows
+
+
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page(request: Request):
+    metrics = _parse_prom_files()
+    return _template_response("logs.html", {
+        "request":      request,
+        "log_sections": _LOG_SECTIONS,
+        "metrics":      metrics,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Configuration page
 # ---------------------------------------------------------------------------
 
@@ -827,12 +899,14 @@ _LOG_DIR = Path("/var/lib/fsbackup/log")
 
 # Map unit name prefixes to their log files (most specific first).
 _UNIT_LOG_MAP = [
-    ("fsbackup-runner@",       _LOG_DIR / "backup.log"),
-    ("fsbackup-promote",       _LOG_DIR / "backup.log"),
-    ("fsbackup-doctor@",       _LOG_DIR / "fs-orphans.log"),
-    ("fsbackup-mirror-daily",  _LOG_DIR / "mirror.log"),
+    ("fsbackup-runner@",          _LOG_DIR / "backup.log"),
+    ("fsbackup-promote",          _LOG_DIR / "backup.log"),
+    ("fsbackup-doctor@",          _LOG_DIR / "fs-orphans.log"),
+    ("fsbackup-mirror-daily",     _LOG_DIR / "mirror.log"),
     ("fsbackup-mirror-retention", _LOG_DIR / "mirror-retention.log"),
-    ("fsbackup-s3-export",     _LOG_DIR / "s3-export.log"),
+    ("fsbackup-s3-export",        _LOG_DIR / "s3-export.log"),
+    ("fsbackup-annual-promote",   _LOG_DIR / "annual-promote.log"),
+    ("fsbackup-orphans",          _LOG_DIR / "fs-orphans.log"),
 ]
 
 def _unit_log_file(unit: str) -> Path | None:
@@ -919,6 +993,65 @@ async def api_run(request: Request, action: str, cls: str = Form(default="")):
             threading.Thread(target=_stream_job, args=(key, proc), daemon=True).start()
             result_ok  = True
             result_msg = f"Started {key}"
+        except Exception as e:
+            result_msg = str(e)
+
+    return templates.TemplateResponse("partials/run_result.html", {
+        "request":    request,
+        "result_ok":  result_ok,
+        "result_msg": result_msg,
+        "unit":       key,
+    })
+
+
+@app.post("/api/run/rename-target", response_class=HTMLResponse)
+async def api_rename_target(
+    request: Request,
+    cls:      str = Form(...),
+    from_id:  str = Form(...),
+    to_id:    str = Form(...),
+    mode:     str = Form(...),       # "move" or "delete"
+    dry_run:  str = Form(default=""), # "1" if checked
+):
+    """Run fs-target-rename.sh with the given parameters."""
+    key = "rename-target"
+    result_msg = ""
+    result_ok  = False
+
+    if _jobs.get(key, {}).get("status") == "running":
+        result_msg = "A rename is already running"
+    elif mode not in ("move", "delete"):
+        result_msg = "Invalid mode — must be move or delete"
+    elif not from_id.strip() or not to_id.strip():
+        result_msg = "from and to target IDs are required"
+    else:
+        script = SCRIPTS_DIR / "utils" / "fs-target-rename.sh"
+        cmd = ["sudo", str(script),
+               "--class", cls,
+               "--from",  from_id.strip(),
+               "--to",    to_id.strip(),
+               f"--{mode}"]
+        if dry_run == "1":
+            cmd.append("--dry-run")
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            with _jobs_lock:
+                _jobs[key] = {
+                    "status":     "running",
+                    "rc":         None,
+                    "started_at": datetime.now(),
+                    "ended_at":   None,
+                    "lines":      deque(maxlen=200),
+                }
+            threading.Thread(target=_stream_job, args=(key, proc), daemon=True).start()
+            result_ok  = True
+            result_msg = f"Started rename: {from_id} → {to_id} ({mode}{'  dry-run' if dry_run == '1' else ''})"
         except Exception as e:
             result_msg = str(e)
 

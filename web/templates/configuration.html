@@ -111,9 +111,14 @@
             <td class="px-4 py-2.5 text-xs text-zinc-400 font-mono max-w-xs truncate">
               {{ target.rsync_opts if target.rsync_opts is defined else '—' }}
             </td>
-            <td class="px-4 py-2.5 text-right">
+            <td class="px-4 py-2.5 text-right whitespace-nowrap">
               <a href="/snapshots?target={{ target.id }}"
-                 class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">Snapshots &rarr;</a>
+                 class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 mr-3">Snapshots &rarr;</a>
+              <button type="button"
+                      onclick="openRenameModal('{{ class_name }}', '{{ target.id }}')"
+                      class="text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+                Rename
+              </button>
             </td>
           </tr>
           {% else %}
@@ -230,5 +235,89 @@
 
 </div>
 {% endif %}
+
+<!-- Rename target modal (shown from Targets tab) -->
+<div id="rename-modal"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+     onclick="if(event.target===this) closeRenameModal()">
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
+      <p class="text-sm font-semibold text-zinc-900 dark:text-white">Rename Target</p>
+      <button onclick="closeRenameModal()" class="text-zinc-400 hover:text-zinc-700 dark:hover:text-white text-xl leading-none">&times;</button>
+    </div>
+    <form hx-post="/api/run/rename-target"
+          hx-target="#rename-result"
+          hx-swap="innerHTML"
+          class="p-5 space-y-4">
+      <input type="hidden" name="cls"     id="rename-cls">
+      <input type="hidden" name="from_id" id="rename-from">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <p class="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Class</p>
+          <p id="rename-cls-display" class="text-sm font-mono text-zinc-900 dark:text-zinc-100"></p>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Current ID</p>
+          <p id="rename-from-display" class="text-sm font-mono text-zinc-900 dark:text-zinc-100"></p>
+        </div>
+      </div>
+      <div>
+        <label for="rename-to" class="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">New target ID</label>
+        <input type="text" name="to_id" id="rename-to" required
+               class="w-full text-sm font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+               placeholder="new-target-id">
+      </div>
+      <div>
+        <p class="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">Mode</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
+            <input type="radio" name="mode" value="move" checked class="accent-brand-600"> Move (keep history)
+          </label>
+          <label class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
+            <input type="radio" name="mode" value="delete" class="accent-brand-600"> Delete old snapshots
+          </label>
+        </div>
+      </div>
+      <div>
+        <label class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
+          <input type="checkbox" name="dry_run" value="1" checked class="accent-brand-600">
+          Dry run — preview changes, make no modifications
+        </label>
+      </div>
+      <div id="rename-result"></div>
+      <div class="flex justify-end gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+        <button type="button" onclick="closeRenameModal()"
+                class="px-4 py-2 text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-500 text-white rounded-lg transition-colors">
+          Run rename
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openRenameModal(cls, fromId) {
+  document.getElementById('rename-cls').value              = cls;
+  document.getElementById('rename-from').value             = fromId;
+  document.getElementById('rename-cls-display').textContent  = cls;
+  document.getElementById('rename-from-display').textContent = fromId;
+  document.getElementById('rename-to').value               = '';
+  document.getElementById('rename-result').innerHTML       = '';
+  document.getElementById('rename-modal').classList.remove('hidden');
+  document.getElementById('rename-modal').classList.add('flex');
+  document.getElementById('rename-to').focus();
+}
+
+function closeRenameModal() {
+  document.getElementById('rename-modal').classList.add('hidden');
+  document.getElementById('rename-modal').classList.remove('flex');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRenameModal(); });
+</script>
 
 {% endblock %}
