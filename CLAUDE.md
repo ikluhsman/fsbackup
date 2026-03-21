@@ -83,7 +83,7 @@ class3 mirroring is optional — controlled by `MIRROR_SKIP_CLASSES` in `fsbacku
 | `fs-trust-host.sh` | `utils/` | manual only (works as root or fsbackup user) |
 | `fs-nodeexp-fix.sh` | `utils/` | manual only |
 | `fs-annual-mirror-check.sh` | `utils/` | manual only |
-| `fs-target-rename.sh` | `utils/` | manual only |
+| `fs-target-rename.sh` | `utils/` | manual only + web UI (Configuration > Targets > Rename) |
 | `fs-export-s3.sh` | `s3/` | supercronic at 04:30 daily |
 | `fsbackup_remote_init.sh` | `remote/` | run ON remote host to set up backup user |
 | `fs-prometheus-prebackup.sh` | `remote/` | run ON denhpsvr1 |
@@ -196,16 +196,31 @@ FastAPI + HTMX + Tailwind. Deployed via Docker (uvicorn inside container).
 - Auth: bcrypt password hash — no PAM/shadow group dependency
 - `/static/` exempt from auth — required so favicon/logos load on the login page
 
+### Pages
+
+| Route | Description |
+|-------|-------------|
+| `/` | Dashboard — class status cards, quick links |
+| `/snapshots` | Filterable snapshot browser |
+| `/logs` | Log viewer for all jobs + Prometheus metrics table |
+| `/restore` | Restore files from a snapshot |
+| `/run` | Trigger runner/doctor/promote/mirror jobs |
+| `/s3` | S3 offsite bucket browser |
+| `/configuration` | Tabbed config: Hosts, Targets (+ rename), Schedule, Volumes & Maintenance |
+| `/targets` | targets.yml viewer (also accessible via Configuration > Targets tab) |
+| `/targets/edit` | Raw targets.yml editor |
+| `/browse` | Filesystem browser inside a snapshot (linked from Snapshots page) |
+
 ## Git / Deployment
 
-- Working repo: `/home/crash/fsbackup` (owned `crash:crash`, scripts `755`)
+- Working repo: `/home/crash/projects/fsbackup` (owned `crash:crash`, scripts `755`)
 - Live stack: `/docker/stacks/fsbackup/docker-compose.yml`
 - Remote: `git@github.com:fsbackup/fsbackup.git` (public, under fsbackup org)
 - Docs site repo: `github.com/fsbackup/fsbackup-docs` (Nuxt 4, domain: fsbackup.org)
 - `conf/targets.yml` is gitignored — never commit it
 - `conf/grafana-dashboard.json` has instance-specific datasource UID; importers must remap
 - Version tags (`v*.*.*`) trigger GitHub Actions to build and push to `ghcr.io/fsbackup/fsbackup`
-- current release is v1.0.2
+- current release is v1.0.5
 
 ## Host Networking — Linux 6.8 FIB Exception Bug
 
