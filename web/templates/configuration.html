@@ -156,10 +156,7 @@
 </div>
 
 {% if crontab %}
-<div id="crontab-table"
-     hx-post="/api/config/crontab/schedule"
-     hx-target="#crontab-table"
-     hx-swap="innerHTML">
+<div id="crontab-table">
   {% include "partials/crontab_table.html" %}
 </div>
 {% else %}
