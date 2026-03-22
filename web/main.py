@@ -761,6 +761,58 @@ async def configuration_page(request: Request, tab: str = "hosts"):
     })
 
 
+@app.post("/api/config/crontab/schedule", response_class=HTMLResponse)
+async def api_crontab_schedule(
+    request: Request,
+    command:  str = Form(...),
+    schedule: str = Form(...),
+):
+    """Update the cron schedule for a single job identified by its command string."""
+    error = ""
+    saved = False
+
+    # Validate: must be exactly 5 whitespace-separated fields, no newlines or semicolons
+    fields = schedule.strip().split()
+    if len(fields) != 5:
+        error = "Schedule must be exactly 5 fields (minute hour day month weekday)"
+    elif any(c in schedule for c in (";", "\n", "\r", "|", "`", "$")):
+        error = "Invalid characters in schedule expression"
+
+    if not error:
+        try:
+            lines = CRONTAB_FILE.read_text().splitlines()
+            new_lines = []
+            matched = False
+            for line in lines:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    new_lines.append(line)
+                    continue
+                parts = stripped.split(None, 5)
+                if len(parts) == 6 and parts[5] == command:
+                    new_lines.append(f"{schedule} {command}")
+                    matched = True
+                else:
+                    new_lines.append(line)
+            if not matched:
+                error = f"Job not found in crontab: {command}"
+            else:
+                tmp = CRONTAB_FILE.with_suffix(".crontab.tmp")
+                tmp.write_text("\n".join(new_lines) + "\n")
+                os.replace(tmp, CRONTAB_FILE)
+                saved = True
+        except Exception as e:
+            error = str(e)
+
+    crontab = _load_crontab()
+    return _template_response("partials/crontab_table.html", {
+        "request": request,
+        "crontab": crontab,
+        "saved":   saved,
+        "error":   error,
+    })
+
+
 @app.get("/s3", response_class=HTMLResponse)
 async def s3_page(request: Request, prefix: str = ""):
     """S3 bucket browser. prefix is a key prefix like 'weekly/class1/myapp/'."""

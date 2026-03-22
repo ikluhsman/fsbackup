@@ -152,36 +152,81 @@
 <!-- ============================================================ SCHEDULE -->
 {% elif tab == "schedule" %}
 <div class="mb-4">
-  <p class="text-sm text-zinc-500">Jobs defined in <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded text-xs">/etc/fsbackup/fsbackup.crontab</code> — read by supercronic (hot-reloads on file change)</p>
+  <p class="text-sm text-zinc-500">Jobs defined in <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded text-xs">/etc/fsbackup/fsbackup.crontab</code> — read by supercronic (hot-reloads on file change). All times UTC.</p>
 </div>
 
 {% if crontab %}
-<div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-left text-xs text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-        <th class="px-5 py-3 font-medium">Job</th>
-        <th class="px-5 py-3 font-medium">Schedule</th>
-        <th class="px-5 py-3 font-medium hidden xl:table-cell">Command</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
-      {% for entry in crontab %}
-      <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-        <td class="px-5 py-3 text-zinc-900 dark:text-zinc-100 font-medium">{{ entry.label }}</td>
-        <td class="px-5 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{{ entry.schedule }}</td>
-        <td class="px-5 py-3 font-mono text-xs text-zinc-400 dark:text-zinc-500 hidden xl:table-cell max-w-sm truncate" title="{{ entry.command }}">{{ entry.command }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div id="crontab-table"
+     hx-post="/api/config/crontab/schedule"
+     hx-target="#crontab-table"
+     hx-swap="innerHTML">
+  {% include "partials/crontab_table.html" %}
 </div>
-<p class="text-xs text-zinc-400 mt-3">All times are in the container timezone (UTC). Edit <code class="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">/etc/fsbackup/fsbackup.crontab</code> on the host to change schedules — supercronic will pick up changes automatically.</p>
 {% else %}
 <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 text-center text-zinc-400 text-sm shadow-sm">
   Could not read crontab — check that the file exists at <code class="font-mono">/etc/fsbackup/fsbackup.crontab</code>.
 </div>
 {% endif %}
+
+<!-- Cron edit modal -->
+<div id="cron-modal"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+     onclick="if(event.target===this) closeCronModal()">
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl w-full max-w-md p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-zinc-900 dark:text-white">Edit Schedule</h3>
+      <button onclick="closeCronModal()" class="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 text-xl leading-none">&times;</button>
+    </div>
+    <p id="cron-modal-label" class="text-xs text-zinc-500 mb-4"></p>
+    <form id="cron-modal-form"
+          hx-post="/api/config/crontab/schedule"
+          hx-target="#crontab-table"
+          hx-swap="innerHTML"
+          hx-on:htmx:after-request="closeCronModal()">
+      <input type="hidden" id="cron-command" name="command" value="">
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cron expression</label>
+        <input type="text" id="cron-schedule" name="schedule"
+               class="w-full font-mono text-sm bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+               placeholder="minute hour day month weekday"
+               autocomplete="off" spellcheck="false">
+        <p class="text-xs text-zinc-400 mt-1.5">
+          5 fields: minute hour day-of-month month day-of-week —
+          <a id="cron-guru-link" href="https://crontab.guru/" target="_blank" rel="noopener"
+             class="text-brand-600 dark:text-brand-400 hover:underline">crontab.guru ↗</a>
+        </p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="closeCronModal()"
+                class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-600 hover:bg-brand-500 text-white transition-colors">
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openCronModal(label, command, schedule) {
+  document.getElementById('cron-modal-label').textContent = label;
+  document.getElementById('cron-command').value = command;
+  document.getElementById('cron-schedule').value = schedule;
+  document.getElementById('cron-guru-link').href =
+    'https://crontab.guru/#' + encodeURIComponent(schedule).replace(/%20/g, '_');
+  document.getElementById('cron-modal').classList.remove('hidden');
+  document.getElementById('cron-modal').classList.add('flex');
+  setTimeout(() => document.getElementById('cron-schedule').focus(), 50);
+}
+function closeCronModal() {
+  document.getElementById('cron-modal').classList.add('hidden');
+  document.getElementById('cron-modal').classList.remove('flex');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCronModal(); });
+</script>
 
 <!-- ============================================================= VOLUMES -->
 {% elif tab == "volumes" %}
