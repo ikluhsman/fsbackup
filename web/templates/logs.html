@@ -36,8 +36,15 @@
         </select>
         <button type="button"
                 onclick="reloadLog('{{ panel_id }}', '{{ unit }}')"
-                class="text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2 py-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800">
-          ↺
+                class="text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2 py-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                title="Reload">↺</button>
+        <button type="button"
+                onclick="openLogModal('{{ unit }}', '{{ label }}')"
+                class="text-zinc-400 hover:text-zinc-200 transition-colors p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                title="Pop out">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+          </svg>
         </button>
       </div>
     </div>
@@ -95,6 +102,34 @@
 </div>
 {% endif %}
 
+<!-- Pop-out log modal -->
+<div id="log-modal"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+     onclick="if(event.target===this) closeLogModal()">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl flex flex-col w-full max-w-6xl resize overflow-auto"
+       style="height:85vh; min-width:400px; min-height:300px;">
+    <div class="flex items-center justify-between px-4 py-2.5 border-b border-zinc-700 shrink-0">
+      <span id="log-modal-title" class="text-xs font-semibold text-zinc-300"></span>
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-zinc-500">Refresh</label>
+        <select id="log-modal-refresh"
+                onchange="setModalRefresh(this.value)"
+                class="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer">
+          <option value="0">Off</option>
+          <option value="10000" selected>10s</option>
+          <option value="30000">30s</option>
+          <option value="60000">1m</option>
+        </select>
+        <button onclick="closeLogModal()"
+                class="text-zinc-400 hover:text-white transition-colors text-xl leading-none">&times;</button>
+      </div>
+    </div>
+    <div id="log-modal-body" class="flex-1 overflow-hidden flex flex-col">
+      <div class="text-zinc-500 text-xs font-mono p-4">Loading…</div>
+    </div>
+  </div>
+</div>
+
 <script>
 const _logTimers = {};
 
@@ -133,11 +168,67 @@ function setLogRefresh(id, unit, value) {
   delete _logTimers[id];
   const ms = parseInt(value, 10);
   if (ms > 0) {
-    // Open the panel if it's collapsed
     const panel = document.getElementById(id);
     if (panel.classList.contains('hidden')) toggleLogPanel(id);
     _logTimers[id] = setInterval(() => reloadLog(id, unit), ms);
   }
 }
+
+// Pop-out modal
+let _modalUnit = null;
+let _modalTimer = null;
+let _modalAtBottom = true;
+let _modalSavedScroll = null;
+const _modalBody = document.getElementById('log-modal-body');
+
+_modalBody.addEventListener('htmx:beforeSwap', function() {
+  const pre = this.querySelector('pre');
+  if (!pre) return;
+  _modalAtBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+  _modalSavedScroll = _modalAtBottom ? null : pre.scrollTop;
+});
+_modalBody.addEventListener('htmx:afterSwap', function() {
+  const pre = this.querySelector('pre');
+  if (!pre) return;
+  if (_modalAtBottom) pre.scrollTop = pre.scrollHeight;
+  else if (_modalSavedScroll !== null) pre.scrollTop = _modalSavedScroll;
+});
+
+function openLogModal(unit, label) {
+  _modalUnit = unit;
+  _modalAtBottom = true;
+  document.getElementById('log-modal-title').textContent = label;
+  document.getElementById('log-modal').classList.remove('hidden');
+  document.getElementById('log-modal').classList.add('flex');
+  loadModal();
+  const ms = parseInt(document.getElementById('log-modal-refresh').value, 10);
+  if (ms > 0) _modalTimer = setInterval(loadModal, ms);
+}
+
+function setModalRefresh(value) {
+  clearInterval(_modalTimer);
+  _modalTimer = null;
+  const ms = parseInt(value, 10);
+  if (ms > 0 && _modalUnit) _modalTimer = setInterval(loadModal, ms);
+}
+
+function closeLogModal() {
+  clearInterval(_modalTimer);
+  _modalTimer = null;
+  _modalUnit = null;
+  document.getElementById('log-modal').classList.add('hidden');
+  document.getElementById('log-modal').classList.remove('flex');
+  _modalBody.innerHTML = '<div class="text-zinc-500 text-xs font-mono p-4">Loading…</div>';
+}
+
+function loadModal() {
+  if (!_modalUnit) return;
+  htmx.ajax('GET', '/api/journal/' + encodeURIComponent(_modalUnit), {
+    target: '#log-modal-body',
+    swap: 'innerHTML',
+  });
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLogModal(); });
 </script>
 {% endblock %}
