@@ -90,10 +90,12 @@ async def require_login(request: Request, call_next):
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie="fsbackup_session", max_age=86400)
 
 # Use a custom TemplateResponse wrapper so every render gets `now`
+# Starlette 1.0 changed signature to TemplateResponse(request, name, context)
 _orig_response = templates.TemplateResponse
 def _template_response(name, context, *args, **kwargs):
     context.setdefault("now", datetime.now())
-    return _orig_response(name, context, *args, **kwargs)
+    request = context.get("request")
+    return _orig_response(request, name, context, *args, **kwargs)
 templates.TemplateResponse = _template_response
 
 
