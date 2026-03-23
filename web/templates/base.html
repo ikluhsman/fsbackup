@@ -3,9 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f97316">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="fsbackup">
   <title>{% block title %}fsbackup{% endblock %}</title>
   <link rel="icon" href="/static/favicon.ico" sizes="any"/>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="/static/icon-256.png"/>
+  <link rel="manifest" href="/static/manifest.json"/>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script>
@@ -28,7 +34,8 @@
             }
           }
         }
-      }
+      },
+      safelist: ['-translate-x-full', 'translate-x-0']
     }
   </script>
   <style>
@@ -49,10 +56,16 @@
 </head>
 <body class="h-full bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans transition-colors duration-150">
 
+<!-- Mobile sidebar backdrop -->
+<div id="sidebar-backdrop"
+     class="fixed inset-0 z-30 bg-black/50 hidden lg:hidden"
+     onclick="closeSidebar()"></div>
+
 <div class="flex h-full">
 
-  <!-- Sidebar -->
-  <aside class="w-56 shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col">
+  <!-- Sidebar (off-canvas on mobile, static on lg+) -->
+  <aside id="sidebar"
+         class="fixed lg:static inset-y-0 left-0 z-40 w-56 shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col -translate-x-full lg:translate-x-0 transition-transform duration-200">
     <div class="px-5 py-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
       <div class="flex items-center gap-2.5">
         <img src="/static/icon.svg" alt="" class="h-7 w-7 rounded-lg shrink-0"/>
@@ -114,12 +127,30 @@
     </div>
   </aside>
 
-  <!-- Main content -->
-  <main class="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
-    <div class="px-8 py-8 max-w-7xl mx-auto">
-      {% block content %}{% endblock %}
+  <!-- Right column: mobile top bar + main content -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+    <!-- Mobile top bar -->
+    <div class="lg:hidden flex items-center gap-3 px-4 h-14 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+      <button onclick="openSidebar()"
+              class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              aria-label="Open navigation">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <img src="/static/icon.svg" alt="" class="h-6 w-6 rounded-md shrink-0"/>
+      <span class="font-bold text-zinc-900 dark:text-white tracking-tight">fsbackup</span>
     </div>
-  </main>
+
+    <!-- Main content -->
+    <main class="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+      <div class="px-4 sm:px-8 py-6 sm:py-8 max-w-7xl mx-auto">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+
+  </div>
 
 </div>
 
@@ -127,6 +158,32 @@
   function toggleTheme() {
     const isDark = document.documentElement.classList.toggle('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }
+
+  function openSidebar() {
+    document.getElementById('sidebar').classList.remove('-translate-x-full');
+    document.getElementById('sidebar').classList.add('translate-x-0');
+    document.getElementById('sidebar-backdrop').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.add('-translate-x-full');
+    document.getElementById('sidebar').classList.remove('translate-x-0');
+    document.getElementById('sidebar-backdrop').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  // Close sidebar on nav link click (mobile)
+  document.querySelectorAll('#sidebar a[href]').forEach(a => {
+    a.addEventListener('click', () => {
+      if (window.innerWidth < 1024) closeSidebar();
+    });
+  });
+
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
   }
 </script>
 </body>
