@@ -156,11 +156,13 @@ SNAPSHOT_ROOT="${SNAPSHOT_ROOT:-/backup/snapshots}"
 ZFS_DATASET="${SNAPSHOT_ROOT#/}"   # e.g. backup/snapshots
 
 if zfs list "$ZFS_DATASET" &>/dev/null; then
-    zfs allow "$FSBACKUP_USER" snapshot "$ZFS_DATASET"
-    ok "zfs allow snapshot on ${ZFS_DATASET} for ${FSBACKUP_USER}"
+    zfs allow "$FSBACKUP_USER" create,snapshot,mount,destroy "$ZFS_DATASET"
+    chown -R "${FSBACKUP_USER}:${FSBACKUP_USER}" "${SNAPSHOT_ROOT}"
+    ok "zfs allow + chown on ${ZFS_DATASET} for ${FSBACKUP_USER}"
 else
     warn "ZFS dataset '${ZFS_DATASET}' not found — create the pool first, then run:"
-    warn "  sudo zfs allow ${FSBACKUP_USER} snapshot ${ZFS_DATASET}"
+    warn "  sudo zfs allow ${FSBACKUP_USER} create,snapshot,mount,destroy ${ZFS_DATASET}"
+    warn "  sudo chown -R ${FSBACKUP_USER}:${FSBACKUP_USER} ${SNAPSHOT_ROOT}"
 fi
 echo
 

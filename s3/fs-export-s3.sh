@@ -3,13 +3,14 @@ set -u
 set -o pipefail
 
 # =============================================================================
-# fs-export-s3.sh — upload snapshots to S3
+# fs-export-s3.sh — upload ZFS snapshots to S3 (v2.0)
 #
-# Uploads weekly, monthly, and annual tiers for all classes not in
-# S3_SKIP_CLASSES. Idempotent: checks S3 before uploading and skips objects
-# that are already present.
+# Enumerates ZFS snapshots via `zfs list -t snapshot`, uploads weekly,
+# monthly, and annual tiers for all classes not in S3_SKIP_CLASSES.
+# Idempotent: checks S3 before uploading and skips objects already present.
 #
 # S3 key structure:  <tier>/<class>/<target>/<target>--<date>.tar.zst.age
+# Snapshot data:     <SNAPSHOT_ROOT>/<class>/<target>/.zfs/snapshot/<name>/
 #
 # Required in /etc/fsbackup/fsbackup.conf:
 #   S3_BUCKET="fsbackup-snapshots-XXXXXX"
@@ -26,6 +27,9 @@ S3_SKIP_CLASSES="${S3_SKIP_CLASSES:-class3}"
 AWS_PROFILE="${S3_AWS_PROFILE:-fsbackup}"
 AGE_PUBKEY_FILE="/etc/fsbackup/age.pub"
 
+PRIMARY_SNAPSHOT_ROOT="${SNAPSHOT_ROOT:-/backup/snapshots}"
+ZFS_BASE="${PRIMARY_SNAPSHOT_ROOT#/}"   # e.g. backup/snapshots
+
 LOG_DIR="/var/lib/fsbackup/log"
 LOG_FILE="${LOG_DIR}/s3-export.log"
 NODEEXP_DIR="/var/lib/node_exporter/textfile_collector"
@@ -40,6 +44,10 @@ mkdir -p "$LOG_DIR"
 
 [[ -n "$S3_BUCKET" ]] || { echo "S3_BUCKET not set in fsbackup.conf" >&2; exit 2; }
 [[ -f "$AGE_PUBKEY_FILE" ]] || { echo "age public key not found: $AGE_PUBKEY_FILE" >&2; exit 2; }
+
+for cmd in zfs age aws; do
+  command -v "$cmd" >/dev/null || { echo "$cmd not found" >&2; exit 2; }
+done
 
 # Lock to prevent overlapping runs
 exec 9>/run/lock/fsbackup-s3-export.lock
@@ -59,80 +67,95 @@ SKIPPED=0
 FAILED=0
 BYTES_TOTAL=0
 
-UPLOAD_TIERS=(weekly monthly annual)
-
 log "Starting S3 export to s3://${S3_BUCKET}"
-log "  Tiers:        ${UPLOAD_TIERS[*]}"
+log "  ZFS base:     ${ZFS_BASE}"
 log "  Skip classes: ${S3_SKIP_CLASSES:-<none>}"
 
-for tier in "${UPLOAD_TIERS[@]}"; do
-  TIER_ROOT="${SNAPSHOT_ROOT}/${tier}"
-  [[ -d "$TIER_ROOT" ]] || continue
+while IFS= read -r snapfull; do
+  # snapfull = backup/snapshots/class1/technicom.files@weekly-2026-W12
+  dataset="${snapfull%%@*}"    # backup/snapshots/class1/technicom.files
+  snapname="${snapfull##*@}"   # weekly-2026-W12
 
-  while IFS= read -r -d '' date_dir; do
-    date_key="$(basename "$date_dir")"
+  # Determine tier and date key from snapshot name
+  case "$snapname" in
+    weekly-*)  tier="weekly";  date_key="${snapname#weekly-}" ;;
+    monthly-*) tier="monthly"; date_key="${snapname#monthly-}" ;;
+    annual-*)  tier="annual";  date_key="${snapname#annual-}" ;;
+    *)         continue ;;  # daily snapshots not exported to S3
+  esac
 
-    while IFS= read -r -d '' class_dir; do
-      cls="$(basename "$class_dir")"
+  # Extract class/target from dataset path relative to ZFS_BASE
+  rel="${dataset#${ZFS_BASE}/}"
 
-      if [[ -n "$S3_SKIP_CLASSES" && " $S3_SKIP_CLASSES " == *" $cls "* ]]; then
-        log "SKIP class=${cls} tier=${tier} date=${date_key} (in S3_SKIP_CLASSES)"
-        continue
-      fi
+  # Must be exactly class/target (two components)
+  cls="${rel%%/*}"
+  target="${rel#*/}"
+  if [[ "$cls" == "$target" || "$target" == */* ]]; then
+    log "WARN: unexpected dataset depth, skipping: $dataset"
+    continue
+  fi
 
-      while IFS= read -r -d '' target_dir; do
-        target="$(basename "$target_dir")"
-        archive="${target}--${date_key}.tar.zst.age"
-        s3_key="${tier}/${cls}/${target}/${archive}"
-        s3_uri="s3://${S3_BUCKET}/${s3_key}"
+  # Skip excluded classes
+  if [[ -n "$S3_SKIP_CLASSES" && " $S3_SKIP_CLASSES " == *" $cls "* ]]; then
+    log "SKIP class=${cls} tier=${tier} date=${date_key} target=${target} (S3_SKIP_CLASSES)"
+    continue
+  fi
 
-        # Skip if already uploaded
-        if aws s3api head-object \
-            --bucket "$S3_BUCKET" \
-            --key "$s3_key" \
-            --profile "$AWS_PROFILE" \
-            &>/dev/null; then
-          log "EXISTS ${s3_uri}"
-          SKIPPED=$((SKIPPED + 1))
-          continue
-        fi
+  # Snapshot data is available via the ZFS .zfs hidden directory
+  snap_data="${PRIMARY_SNAPSHOT_ROOT}/${cls}/${target}/.zfs/snapshot/${snapname}"
+  if [[ ! -d "$snap_data" ]]; then
+    log "WARN: snapshot data dir not found: $snap_data"
+    continue
+  fi
 
-        log "UPLOAD ${s3_uri}"
+  archive="${target}--${date_key}.tar.zst.age"
+  s3_key="${tier}/${cls}/${target}/${archive}"
+  s3_uri="s3://${S3_BUCKET}/${s3_key}"
 
-        if tar -C "$target_dir" -cf - . \
-            | zstd -6 -T0 \
-            | age -e -R "$AGE_PUBKEY_FILE" \
-            | aws s3 cp - "$s3_uri" \
-                --no-progress \
-                --profile "$AWS_PROFILE"; then
+  # Skip if already uploaded
+  if aws s3api head-object \
+      --bucket "$S3_BUCKET" \
+      --key "$s3_key" \
+      --profile "$AWS_PROFILE" \
+      &>/dev/null; then
+    log "EXISTS ${s3_uri}"
+    SKIPPED=$((SKIPPED + 1))
+    continue
+  fi
 
-          UPLOADED=$((UPLOADED + 1))
+  log "UPLOAD ${s3_uri}"
 
-          BYTES=$(aws s3api head-object \
-            --bucket "$S3_BUCKET" \
-            --key "$s3_key" \
-            --profile "$AWS_PROFILE" \
-            --query 'ContentLength' \
-            --output text 2>/dev/null || echo 0)
-          BYTES_TOTAL=$((BYTES_TOTAL + BYTES))
+  if tar -C "$snap_data" -cf - . \
+      | zstd -6 -T0 \
+      | age -e -R "$AGE_PUBKEY_FILE" \
+      | aws s3 cp - "$s3_uri" \
+          --no-progress \
+          --profile "$AWS_PROFILE"; then
 
-          log "OK ${s3_uri} (${BYTES} bytes)"
+    UPLOADED=$((UPLOADED + 1))
 
-          echo "fsbackup_s3_target_last_upload{tier=\"${tier}\",class=\"${cls}\",target=\"${target}\"} $(date +%s)" \
-            >>"$PROM_TMP"
+    BYTES=$(aws s3api head-object \
+      --bucket "$S3_BUCKET" \
+      --key "$s3_key" \
+      --profile "$AWS_PROFILE" \
+      --query 'ContentLength' \
+      --output text 2>/dev/null || echo 0)
+    BYTES_TOTAL=$((BYTES_TOTAL + BYTES))
 
-        else
-          FAILED=$((FAILED + 1))
-          log "ERROR upload failed: ${s3_uri}"
+    log "OK ${s3_uri} (${BYTES} bytes)"
 
-          echo "fsbackup_s3_target_last_failure{tier=\"${tier}\",class=\"${cls}\",target=\"${target}\"} $(date +%s)" \
-            >>"$PROM_TMP"
-        fi
+    echo "fsbackup_s3_target_last_upload{tier=\"${tier}\",class=\"${cls}\",target=\"${target}\"} $(date +%s)" \
+      >>"$PROM_TMP"
 
-      done < <(find "$class_dir" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
-    done < <(find "$date_dir" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
-  done < <(find "$TIER_ROOT" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
-done
+  else
+    FAILED=$((FAILED + 1))
+    log "ERROR upload failed: ${s3_uri}"
+
+    echo "fsbackup_s3_target_last_failure{tier=\"${tier}\",class=\"${cls}\",target=\"${target}\"} $(date +%s)" \
+      >>"$PROM_TMP"
+  fi
+
+done < <(zfs list -t snapshot -r -H -o name "$ZFS_BASE" 2>/dev/null | sort)
 
 END_TS="$(date +%s)"
 DURATION=$((END_TS - START_TS))
