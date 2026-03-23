@@ -200,7 +200,7 @@ for class in class1 class2 class3; do
 done
 
 # Other timers
-for unit in fsbackup-s3-export.timer fsbackup-scrub.timer fsbackup-logrotate-metric.timer; do
+for unit in fsbackup-retention.timer fsbackup-s3-export.timer fsbackup-scrub.timer fsbackup-logrotate-metric.timer; do
     systemctl enable "$unit" 2>/dev/null && ok "Enabled: ${unit}"
 done
 echo

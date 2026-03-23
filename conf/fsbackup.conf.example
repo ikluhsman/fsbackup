@@ -21,6 +21,17 @@ CLASS3_MONTHLY_SCHEDULE="*-*-01 04:00"
 # CLASS3_DAILY_SCHEDULE=""     # omit to disable daily class3 runs
 
 # =============================================================================
+# Retention — how many ZFS snapshots of each type to keep per target
+# Applied by fs-retention.sh (runs daily via fsbackup-retention.timer)
+# KEEP_ANNUAL=0 means keep all annual snapshots indefinitely
+# =============================================================================
+
+KEEP_DAILY=14
+KEEP_WEEKLY=8
+KEEP_MONTHLY=12
+KEEP_ANNUAL=0
+
+# =============================================================================
 # S3 export
 # =============================================================================
 

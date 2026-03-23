@@ -1,0 +1,9 @@
+[Unit]
+Description=fsbackup ZFS snapshot retention pruning
+After=fsbackup-runner-daily@class1.service fsbackup-runner-daily@class2.service
+
+[Service]
+UMask=0022
+Type=oneshot
+User=fsbackup
+ExecStart=/opt/fsbackup/bin/fs-retention.sh
