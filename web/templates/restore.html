@@ -18,7 +18,7 @@
       <div>
         <label class="block text-xs text-zinc-500 mb-1">Snapshot path</label>
         <input type="text" name="snapshot_path" value="{{ snapshot_path }}"
-               placeholder="/backup/snapshots/daily/2025-01-01/class1/myhost.myapp"
+               placeholder="/backup/snapshots/class1/myhost.myapp/.zfs/snapshot/daily-2026-03-23"
                class="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm font-mono rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500"/>
         <p class="text-xs text-zinc-400 mt-1">Full path to the snapshot directory</p>
       </div>
@@ -74,7 +74,8 @@
 <div class="mt-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
   <h2 class="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">Manual restore</h2>
   <p class="text-xs text-zinc-400 mb-3">To restore from the command line:</p>
-  <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 overflow-x-auto">/opt/fsbackup/utils/fs-restore.sh --snapshot /backup/snapshots/&lt;tier&gt;/&lt;date&gt;/&lt;class&gt;/&lt;target&gt; --dest /restore/path</pre>
+  <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 overflow-x-auto">/opt/fsbackup/utils/fs-restore.sh restore --class &lt;class&gt; --id &lt;target&gt; --latest --to /restore/path
+/opt/fsbackup/utils/fs-restore.sh restore --class &lt;class&gt; --id &lt;target&gt; --snapshot weekly-2026-W12 --to /restore/path</pre>
   <p class="text-xs text-zinc-400 mt-4">For S3 archives:</p>
   <pre class="text-xs text-zinc-700 dark:text-zinc-300 font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-4 mt-1 overflow-x-auto">aws s3 cp s3://fsbackup-snapshots-SUFFIX/&lt;tier&gt;/&lt;class&gt;/&lt;target&gt;/&lt;archive&gt;.tar.zst.age . \
   &amp;&amp; age -d -i /etc/fsbackup/age.key &lt;archive&gt;.tar.zst.age | zstd -d | tar -xf - -C /restore/path/</pre>

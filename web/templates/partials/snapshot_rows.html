@@ -14,18 +14,6 @@
   <td class="px-4 py-2.5 font-mono text-zinc-600 dark:text-zinc-300 text-xs">{{ s.date }}</td>
   <td class="px-4 py-2.5 text-zinc-500 text-xs">{{ s.class }}</td>
   <td class="px-4 py-2.5 font-medium text-zinc-900 dark:text-white">{{ s.target }}</td>
-  <td class="px-4 py-2.5">
-    {% if s.mirrored %}
-      <span class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-        </svg>
-        Yes
-      </span>
-    {% else %}
-      <span class="text-xs text-zinc-300 dark:text-zinc-600">—</span>
-    {% endif %}
-  </td>
   <td class="px-4 py-2.5 text-xs">
     {% if s.exp_date is none %}
       <span class="text-zinc-400">Never</span>
@@ -46,6 +34,6 @@
 </tr>
 {% else %}
 <tr>
-  <td colspan="7" class="px-4 py-8 text-center text-zinc-400 text-sm">No snapshots found.</td>
+  <td colspan="6" class="px-4 py-8 text-center text-zinc-400 text-sm">No snapshots found.</td>
 </tr>
 {% endfor %}

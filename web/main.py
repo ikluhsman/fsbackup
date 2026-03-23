@@ -29,7 +29,6 @@ from starlette.middleware.sessions import SessionMiddleware
 # ---------------------------------------------------------------------------
 
 SNAPSHOT_ROOT = Path(os.environ.get("SNAPSHOT_ROOT", "/backup/snapshots"))
-MIRROR_ROOT   = Path(os.environ.get("MIRROR_ROOT",   "/backup2/snapshots"))
 TARGETS_FILE  = Path(os.environ.get("TARGETS_FILE",  "/etc/fsbackup/targets.yml"))
 SCRIPTS_DIR   = Path(os.environ.get("SCRIPTS_DIR",   "/opt/fsbackup"))
 CRONTAB_FILE  = Path(os.environ.get("CRONTAB_FILE",  "/etc/fsbackup/fsbackup.crontab"))
@@ -130,54 +129,69 @@ def expiration_date(tier: str, snapshot_date: date | None) -> date | None:
     return snapshot_date + timedelta(days=days)
 
 
-def snapshot_is_mirrored(tier: str, date_str: str, cls: str, target: str) -> bool:
-    mirror_path = MIRROR_ROOT / tier / date_str / cls / target
-    return mirror_path.exists()
-
-
 def list_snapshots(tier_filter=None, class_filter=None, target_filter=None, date_filter=None) -> list[dict]:
-    """Walk SNAPSHOT_ROOT and return a list of snapshot dicts."""
+    """Enumerate ZFS snapshots and return a list of snapshot dicts (v2.0).
+
+    Snapshots are named <type>-<date> (e.g. daily-2026-03-23, weekly-2026-W12).
+    Data is accessed via the .zfs/snapshot/ hidden directory on each dataset.
+    """
     snapshots = []
     today = date.today()
+    zfs_base = str(SNAPSHOT_ROOT).lstrip("/")
 
-    tiers = [tier_filter] if tier_filter else TIERS
-    for tier in tiers:
-        tier_path = SNAPSHOT_ROOT / tier
-        if not tier_path.is_dir():
+    try:
+        result = subprocess.run(
+            ["zfs", "list", "-t", "snapshot", "-r", "-H", "-o", "name", zfs_base],
+            capture_output=True, text=True, timeout=10,
+        )
+        lines = result.stdout.strip().splitlines()
+    except Exception:
+        return []
+
+    for line in sorted(lines, reverse=True):
+        if "@" not in line:
             continue
-        for date_dir in sorted(tier_path.iterdir(), reverse=True):
-            if not date_dir.is_dir():
-                continue
-            if date_filter and date_dir.name != date_filter:
-                continue
-            snap_date = parse_snapshot_date(tier, date_dir.name)
-            exp_date  = expiration_date(tier, snap_date)
-            expires_soon = (
-                exp_date is not None and (exp_date - today).days <= 3
-            ) if exp_date else False
+        dataset, snapname = line.split("@", 1)
+        rel = dataset.removeprefix(zfs_base + "/")
+        if "/" not in rel:
+            continue  # the base dataset itself
+        cls, target = rel.split("/", 1)
+        if "/" in target:
+            continue  # unexpected depth
 
-            for cls_dir in sorted(date_dir.iterdir()):
-                if not cls_dir.is_dir():
-                    continue
-                if class_filter and cls_dir.name != class_filter:
-                    continue
-                for target_dir in sorted(cls_dir.iterdir()):
-                    if not target_dir.is_dir():
-                        continue
-                    if target_filter and target_dir.name != target_filter:
-                        continue
-                    mirrored = snapshot_is_mirrored(tier, date_dir.name, cls_dir.name, target_dir.name)
-                    snapshots.append({
-                        "tier":         tier,
-                        "date":         date_dir.name,
-                        "class":        cls_dir.name,
-                        "target":       target_dir.name,
-                        "path":         str(target_dir),
-                        "snap_date":    snap_date,
-                        "exp_date":     exp_date,
-                        "expires_soon": expires_soon,
-                        "mirrored":     mirrored,
-                    })
+        if "-" not in snapname:
+            continue
+        tier, _, date_str = snapname.partition("-")
+        if tier not in TIERS:
+            continue
+
+        if tier_filter and tier != tier_filter:
+            continue
+        if class_filter and cls != class_filter:
+            continue
+        if target_filter and target != target_filter:
+            continue
+        if date_filter and date_str != date_filter:
+            continue
+
+        snap_date = parse_snapshot_date(tier, date_str)
+        exp_date  = expiration_date(tier, snap_date)
+        expires_soon = (
+            exp_date is not None and (exp_date - today).days <= 3
+        ) if exp_date else False
+
+        snap_data = SNAPSHOT_ROOT / cls / target / ".zfs" / "snapshot" / snapname
+        snapshots.append({
+            "tier":         tier,
+            "date":         date_str,
+            "class":        cls,
+            "target":       target,
+            "snapshot":     snapname,
+            "path":         str(snap_data),
+            "snap_date":    snap_date,
+            "exp_date":     exp_date,
+            "expires_soon": expires_soon,
+        })
     return snapshots
 
 
@@ -343,12 +357,11 @@ async def snapshots_page(
     )
     # Unique values for filter dropdowns
     all_targets = sorted({s["target"] for s in list_snapshots()})
-    # Available dates for selected tier (for the date picker datalist)
-    tier_dates = []
-    if tier:
-        tier_path = SNAPSHOT_ROOT / tier
-        if tier_path.is_dir():
-            tier_dates = sorted([d.name for d in tier_path.iterdir() if d.is_dir()], reverse=True)
+    # Available dates for the selected tier (for the date picker datalist)
+    tier_dates = sorted(
+        {s["date"] for s in list_snapshots(tier_filter=tier or None)},
+        reverse=True,
+    ) if tier else []
 
     return templates.TemplateResponse("snapshots.html", {
         "request":       request,
@@ -508,14 +521,11 @@ async def api_restore(
         error = "Destination path is required."
     else:
         snap = Path(snapshot_path)
-        # Safety: must be within a known snapshot root
-        allowed_roots = [SNAPSHOT_ROOT]
-        if MIRROR_ROOT:
-            allowed_roots.append(MIRROR_ROOT)
+        # Safety: must be within SNAPSHOT_ROOT
         try:
             resolved = snap.resolve()
-            if not any(str(resolved).startswith(str(r)) for r in allowed_roots):
-                error = f"Snapshot path must be within {SNAPSHOT_ROOT} or {MIRROR_ROOT}"
+            if not str(resolved).startswith(str(SNAPSHOT_ROOT)):
+                error = f"Snapshot path must be within {SNAPSHOT_ROOT}"
             elif not resolved.is_dir():
                 error = f"Snapshot directory not found: {snapshot_path}"
         except Exception as e:
@@ -809,36 +819,17 @@ async def configuration_page(request: Request, tab: str = "hosts"):
                 seen.add(h)
                 hosts.append(h)
 
-    # Build per-target volume info: which snapshot root has data for it?
-    target_volumes: dict[str, list[str]] = {}
-    for class_targets in targets.values():
+    # Build per-target provisioned status: does the ZFS dataset exist?
+    target_volumes: dict[str, bool] = {}
+    for class_name, class_targets in targets.items():
         for t in class_targets:
             tid = t.get("id", "")
-            vols = []
-            for root in (SNAPSHOT_ROOT, MIRROR_ROOT):
-                for tier_dir in root.glob("*"):
-                    for date_dir in tier_dir.glob("*"):
-                        for cls_dir in date_dir.glob("*"):
-                            if (cls_dir / tid).exists():
-                                vols.append(str(root))
-                                break
-                        else:
-                            continue
-                        break
-                    else:
-                        continue
-                    break
-            target_volumes[tid] = list(set(vols))
+            target_volumes[tid] = (SNAPSHOT_ROOT / class_name / tid).is_dir()
 
     primary_disk = _disk_info(SNAPSHOT_ROOT)
-    mirror_disk  = _disk_info(MIRROR_ROOT)
-
     primary_disk["fmt_used"]  = _fmt_bytes(primary_disk["used"])
     primary_disk["fmt_free"]  = _fmt_bytes(primary_disk["free"])
     primary_disk["fmt_total"] = _fmt_bytes(primary_disk["total"])
-    mirror_disk["fmt_used"]   = _fmt_bytes(mirror_disk["used"])
-    mirror_disk["fmt_free"]   = _fmt_bytes(mirror_disk["free"])
-    mirror_disk["fmt_total"]  = _fmt_bytes(mirror_disk["total"])
 
     crontab = _load_crontab()
 
@@ -849,10 +840,8 @@ async def configuration_page(request: Request, tab: str = "hosts"):
         "targets":        targets,
         "target_volumes": target_volumes,
         "primary_disk":   primary_disk,
-        "mirror_disk":    mirror_disk,
         "crontab":        crontab,
         "snapshot_root":  str(SNAPSHOT_ROOT),
-        "mirror_root":    str(MIRROR_ROOT),
     })
 
 
@@ -1002,10 +991,10 @@ async def api_snapshots(
 @app.get("/api/tier-dates", response_class=HTMLResponse)
 async def api_tier_dates(request: Request, tier: str = "daily"):
     """Return a datalist of available dates for a given tier (for the date picker)."""
-    dates = []
-    tier_path = SNAPSHOT_ROOT / tier
-    if tier_path.is_dir():
-        dates = sorted([d.name for d in tier_path.iterdir() if d.is_dir()], reverse=True)
+    dates = sorted(
+        {s["date"] for s in list_snapshots(tier_filter=tier or None)},
+        reverse=True,
+    )
     options = "".join(f'<option value="{d}"></option>' for d in dates)
     return HTMLResponse(f'<datalist id="tier-dates">{options}</datalist>')
 
