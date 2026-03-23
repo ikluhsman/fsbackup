@@ -1,0 +1,9 @@
+[Unit]
+Description=fsbackup ZFS snapshot retention pruning (daily)
+
+[Timer]
+OnCalendar=*-*-* 06:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
