@@ -465,349 +465,6 @@
           }
         }
       },
-      "panel-13": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_retention_removed_daily",
-                        "instant": true,
-                        "legendFormat": "Daily",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_retention_removed_weekly",
-                        "instant": true,
-                        "legendFormat": "Weekly",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "B"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_retention_removed_monthly",
-                        "instant": true,
-                        "legendFormat": "Monthly",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "C"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 13,
-          "links": [],
-          "title": "Pruned Snapshots",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "blue",
-                    "mode": "fixed"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-16": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_promote_last_run_seconds * 1000",
-                        "format": "time_series",
-                        "instant": true,
-                        "legendFormat": "__auto",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 16,
-          "links": [],
-          "title": "Last Promotion",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "dark-blue",
-                    "mode": "fixed"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      }
-                    ]
-                  },
-                  "unit": "dateTimeFromNow"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-17": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_promote_weekly_classes_promoted",
-                        "instant": true,
-                        "legendFormat": "Weekly",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_promote_monthly_classes_promoted",
-                        "instant": true,
-                        "legendFormat": "Monthly",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "B"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_promote_failures",
-                        "instant": true,
-                        "legendFormat": "Failures",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "C"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 17,
-          "links": [],
-          "title": "Promotions",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "blue",
-                    "mode": "fixed"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
       "panel-19": {
         "kind": "Panel",
         "spec": {
@@ -1200,479 +857,6 @@
           }
         }
       },
-      "panel-21": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "100 * node_filesystem_avail_bytes{instance=\"fs.kluhsman.com:9100\",device=\"/dev/sdc1\"}\r\n/\r\nnode_filesystem_size_bytes{instance=\"fs.kluhsman.com:9100\",device=\"/dev/sdc1\"}",
-                        "format": "time_series",
-                        "instant": true,
-                        "legendFormat": "Free",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "Free"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "100 * (\r\n  node_filesystem_size_bytes{instance=\"fs.kluhsman.com:9100\",device=\"/dev/sdc1\"}\r\n  -\r\n  node_filesystem_avail_bytes{instance=\"fs.kluhsman.com:9100\",device=\"/dev/sdc1\"}\r\n) / node_filesystem_size_bytes{instance=\"fs.kluhsman.com:9100\",device=\"/dev/sdc1\"}",
-                        "format": "time_series",
-                        "instant": true,
-                        "legendFormat": "Used",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "Used"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 21,
-          "links": [],
-          "title": "/backup2 %",
-          "vizConfig": {
-            "group": "piechart",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "mode": "palette-classic"
-                  },
-                  "custom": {
-                    "hideFrom": {
-                      "legend": false,
-                      "tooltip": false,
-                      "viz": false
-                    }
-                  },
-                  "unit": "percent"
-                },
-                "overrides": []
-              },
-              "options": {
-                "legend": {
-                  "displayMode": "list",
-                  "placement": "bottom",
-                  "showLegend": true
-                },
-                "pieType": "pie",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "sort": "desc",
-                "tooltip": {
-                  "hideZeros": false,
-                  "mode": "single",
-                  "sort": "none"
-                }
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-23": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_mirror_retention_last_success * 1000",
-                        "instant": true,
-                        "legendFormat": "Success",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "Last successful run of the mirror retention job that prunes the backup2 mirror.",
-          "id": 23,
-          "links": [],
-          "title": "Mirror Retention Last Success",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "blue",
-                    "mode": "fixed"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      }
-                    ]
-                  },
-                  "unit": "dateTimeFromNow"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-24": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "fsbackup_mirror_retention_duration_seconds",
-                        "legendFormat": "Duration (s)",
-                        "range": true
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "expr": "",
-                        "instant": false,
-                        "range": true
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "B"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 24,
-          "links": [],
-          "title": "Mirror Run Time (s)",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "blue",
-                    "mode": "fixed"
-                  },
-                  "fieldMinMax": false,
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      },
-                      {
-                        "color": "red",
-                        "value": 80
-                      }
-                    ]
-                  },
-                  "unit": "s"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-25": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "fsbackup_mirror_retention_candidates_total",
-                        "legendFormat": "{{tier}}",
-                        "range": true
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 25,
-          "links": [],
-          "title": "Mirror Candidates",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "blue",
-                    "mode": "fixed"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      },
-                      {
-                        "color": "red",
-                        "value": 80
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-26": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_mirror_retention_deleted_total",
-                        "instant": true,
-                        "legendFormat": "{{tier}}",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 26,
-          "links": [],
-          "title": "Mirror Deleted Total",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "blue",
-                    "mode": "fixed"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      },
-                      {
-                        "color": "red",
-                        "value": 80
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
       "panel-29": {
         "kind": "Panel",
         "spec": {
@@ -1702,29 +886,6 @@
                       "version": "v0"
                     },
                     "refId": "A"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_annual_immutable{root=\"mirror\"}",
-                        "instant": true,
-                        "legendFormat": "{{root}}",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "B"
                   }
                 }
               ],
@@ -2621,193 +1782,6 @@
                 "graphMode": "none",
                 "justifyMode": "auto",
                 "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-38": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "builder",
-                        "expr": "fsbackup_mirror_last_exit_code",
-                        "legendFormat": "{{mode}}",
-                        "range": true
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 38,
-          "links": [],
-          "title": "Last Mirror Status",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "mode": "thresholds"
-                  },
-                  "mappings": [
-                    {
-                      "options": {
-                        "0": {
-                          "index": 0,
-                          "text": "\u2714\ufe0f"
-                        },
-                        "1": {
-                          "index": 1,
-                          "text": "\u26a0\ufe0f"
-                        }
-                      },
-                      "type": "value"
-                    }
-                  ],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      },
-                      {
-                        "color": "red",
-                        "value": 80
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              }
-            },
-            "version": "12.3.1"
-          }
-        }
-      },
-      "panel-39": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "deyoouwm5m1vkd"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "fsbackup_mirror_last_success * 1000 ",
-                        "instant": true,
-                        "legendFormat": "{{mode}}",
-                        "range": false
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 39,
-          "links": [],
-          "title": "Mirror Last Success",
-          "vizConfig": {
-            "group": "stat",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "fixedColor": "blue",
-                    "mode": "fixed"
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      },
-                      {
-                        "color": "red",
-                        "value": 80
-                      }
-                    ]
-                  },
-                  "unit": "dateTimeFromNow"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
                 "percentChangeColorMode": "standard",
                 "reduceOptions": {
                   "calcs": [
@@ -3738,7 +2712,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -3760,7 +2736,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -3782,7 +2760,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -3804,7 +2784,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -3869,23 +2851,42 @@
             "spec": {
               "fieldConfig": {
                 "defaults": {
-                  "color": { "mode": "thresholds" },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "custom": {
                     "align": "auto",
-                    "cellOptions": { "type": "auto" },
+                    "cellOptions": {
+                      "type": "auto"
+                    },
                     "filterable": false,
-                    "footer": { "reducers": [] },
+                    "footer": {
+                      "reducers": []
+                    },
                     "inspect": false
                   },
                   "thresholds": {
                     "mode": "absolute",
-                    "steps": [{ "color": "green", "value": 0 }]
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
                   }
                 },
                 "overrides": [
                   {
-                    "matcher": { "id": "byName", "options": "Xfr Bytes" },
-                    "properties": [{ "id": "unit", "value": "bytes" }]
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Xfr Bytes"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "bytes"
+                      }
+                    ]
                   }
                 ]
               },
@@ -3893,7 +2894,12 @@
                 "cellHeight": "sm",
                 "enablePagination": false,
                 "showHeader": true,
-                "sortBy": [{ "desc": false, "displayName": "Target" }]
+                "sortBy": [
+                  {
+                    "desc": false,
+                    "displayName": "Target"
+                  }
+                ]
               }
             },
             "version": "12.3.1"
@@ -3912,7 +2918,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -3934,7 +2942,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -3956,7 +2966,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -3978,7 +2990,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -4043,23 +3057,42 @@
             "spec": {
               "fieldConfig": {
                 "defaults": {
-                  "color": { "mode": "thresholds" },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "custom": {
                     "align": "auto",
-                    "cellOptions": { "type": "auto" },
+                    "cellOptions": {
+                      "type": "auto"
+                    },
                     "filterable": false,
-                    "footer": { "reducers": [] },
+                    "footer": {
+                      "reducers": []
+                    },
                     "inspect": false
                   },
                   "thresholds": {
                     "mode": "absolute",
-                    "steps": [{ "color": "green", "value": 0 }]
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
                   }
                 },
                 "overrides": [
                   {
-                    "matcher": { "id": "byName", "options": "Xfr Bytes" },
-                    "properties": [{ "id": "unit", "value": "bytes" }]
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Xfr Bytes"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "bytes"
+                      }
+                    ]
                   }
                 ]
               },
@@ -4067,7 +3100,12 @@
                 "cellHeight": "sm",
                 "enablePagination": false,
                 "showHeader": true,
-                "sortBy": [{ "desc": false, "displayName": "Target" }]
+                "sortBy": [
+                  {
+                    "desc": false,
+                    "displayName": "Target"
+                  }
+                ]
               }
             },
             "version": "12.3.1"
@@ -4086,7 +3124,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -4108,7 +3148,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -4130,7 +3172,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -4152,7 +3196,9 @@
                   "spec": {
                     "hidden": false,
                     "query": {
-                      "datasource": { "name": "deyoouwm5m1vkd" },
+                      "datasource": {
+                        "name": "deyoouwm5m1vkd"
+                      },
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
@@ -4217,23 +3263,42 @@
             "spec": {
               "fieldConfig": {
                 "defaults": {
-                  "color": { "mode": "thresholds" },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "custom": {
                     "align": "auto",
-                    "cellOptions": { "type": "auto" },
+                    "cellOptions": {
+                      "type": "auto"
+                    },
                     "filterable": false,
-                    "footer": { "reducers": [] },
+                    "footer": {
+                      "reducers": []
+                    },
                     "inspect": false
                   },
                   "thresholds": {
                     "mode": "absolute",
-                    "steps": [{ "color": "green", "value": 0 }]
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
                   }
                 },
                 "overrides": [
                   {
-                    "matcher": { "id": "byName", "options": "Xfr Bytes" },
-                    "properties": [{ "id": "unit", "value": "bytes" }]
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Xfr Bytes"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "bytes"
+                      }
+                    ]
                   }
                 ]
               },
@@ -4241,7 +3306,132 @@
                 "cellHeight": "sm",
                 "enablePagination": false,
                 "showHeader": true,
-                "sortBy": [{ "desc": false, "displayName": "Target" }]
+                "sortBy": [
+                  {
+                    "desc": false,
+                    "displayName": "Target"
+                  }
+                ]
+              }
+            },
+            "version": "12.3.1"
+          }
+        }
+      },
+      "panel-50": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "fsbackup_retention_destroyed_total",
+                        "instant": true,
+                        "legendFormat": "Destroyed",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "fsbackup_retention_kept_total",
+                        "instant": true,
+                        "legendFormat": "Kept",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "fsbackup_retention_duration_seconds",
+                        "instant": true,
+                        "legendFormat": "Duration (s)",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 50,
+          "links": [],
+          "title": "Retention (last run)",
+          "vizConfig": {
+            "group": "stat",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "fixedColor": "blue",
+                    "mode": "fixed"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
               }
             },
             "version": "12.3.1"
