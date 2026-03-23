@@ -4,7 +4,7 @@ set -euo pipefail
 # =============================================================================
 # fs-target-rename.sh
 #
-# Rename or delete snapshots for a target ID across all tiers.
+# Rename or delete a target's ZFS dataset (and all its snapshots).
 #
 # Usage:
 #   fs-target-rename.sh \
@@ -15,7 +15,7 @@ set -euo pipefail
 #     [--dry-run]
 # =============================================================================
 
-SNAPSHOT_ROOT="/backup/snapshots"
+. /etc/fsbackup/fsbackup.conf
 
 CLASS=""
 FROM_ID=""
@@ -31,12 +31,12 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --class) CLASS="$2"; shift 2 ;;
-    --from) FROM_ID="$2"; shift 2 ;;
-    --to) TO_ID="$2"; shift 2 ;;
-    --move) MODE="move"; shift ;;
-    --delete) MODE="delete"; shift ;;
-    --dry-run) DRY_RUN=1; shift ;;
+    --class)   CLASS="$2";   shift 2 ;;
+    --from)    FROM_ID="$2"; shift 2 ;;
+    --to)      TO_ID="$2";   shift 2 ;;
+    --move)    MODE="move";  shift ;;
+    --delete)  MODE="delete"; shift ;;
+    --dry-run) DRY_RUN=1;   shift ;;
     *) usage ;;
   esac
 done
@@ -53,50 +53,35 @@ log() {
   echo "$(date +%Y-%m-%dT%H:%M:%S%z) [fs-target-rename] $*"
 }
 
-tiers=(daily weekly monthly)
+ZFS_BASE="${SNAPSHOT_ROOT#/}"
+FROM_DATASET="${ZFS_BASE}/${CLASS}/${FROM_ID}"
 
-FOUND=0
-
-for tier in "${tiers[@]}"; do
-  tier_dir="${SNAPSHOT_ROOT}/${tier}"
-
-  [[ -d "$tier_dir" ]] || continue
-
-  while IFS= read -r -d '' path; do
-    FOUND=1
-    parent="$(dirname "$path")"
-
-    case "$MODE" in
-      move)
-        dest="${parent}/${TO_ID}"
-        log "MOVE ${path} → ${dest}"
-        if [[ "$DRY_RUN" -eq 0 ]]; then
-          mkdir -p "$parent"
-          mv "$path" "$dest"
-        fi
-        ;;
-      delete)
-        log "DELETE ${path}"
-        if [[ "$DRY_RUN" -eq 0 ]]; then
-          rm -rf "$path"
-        fi
-        ;;
-    esac
-  done < <(
-    find "$tier_dir" -mindepth 3 -maxdepth 3 \
-      -type d \
-      -path "*/${CLASS}/${FROM_ID}" \
-      -print0
-  )
-done
-
-if [[ "$FOUND" -eq 0 ]]; then
-  log "No snapshots found for target '${FROM_ID}' (class=${CLASS})"
-else
-  log "Completed (${MODE}) operation for target '${FROM_ID}'"
+# Verify source dataset exists
+if ! zfs list -H -o name "$FROM_DATASET" &>/dev/null; then
+  log "ERROR: dataset not found: ${FROM_DATASET}"
+  exit 1
 fi
+
+SNAP_COUNT=$(zfs list -t snapshot -r -H -o name "$FROM_DATASET" 2>/dev/null | wc -l)
+
+case "$MODE" in
+  move)
+    TO_DATASET="${ZFS_BASE}/${CLASS}/${TO_ID}"
+    log "RENAME ${FROM_DATASET} → ${TO_DATASET}  (${SNAP_COUNT} snapshots)"
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      zfs rename "$FROM_DATASET" "$TO_DATASET"
+      log "SUCCESS"
+    fi
+    ;;
+  delete)
+    log "DESTROY ${FROM_DATASET}  (${SNAP_COUNT} snapshots)"
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      zfs destroy -r "$FROM_DATASET"
+      log "SUCCESS"
+    fi
+    ;;
+esac
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   log "DRY-RUN: no changes made"
 fi
-
