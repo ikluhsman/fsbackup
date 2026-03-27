@@ -185,6 +185,7 @@ All times approximate. Timers use `RandomizedDelaySec` to avoid thundering herd.
 | `/backup/snapshots/` | Primary snapshot root |
 | `/backup2/snapshots/` | Mirror snapshot root |
 | `/var/lib/node_exporter/textfile_collector/` | Prometheus metrics output |
+| `/etc/sudoers.d/fsbackup-zfs-destroy` | Scoped NOPASSWD rule: allows `fsbackup` to run `zfs destroy -r <dataset>/*/*` (required by web UI orphan-delete) |
 
 ---
 

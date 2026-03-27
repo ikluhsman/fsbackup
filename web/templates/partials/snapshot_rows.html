@@ -1,5 +1,26 @@
+{% if deleted is defined and deleted %}
+<tr>
+  <td colspan="7" class="px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs">
+    Deleted {{ deleted|length }} orphan dataset{{ 's' if deleted|length != 1 }}.
+  </td>
+</tr>
+{% endif %}
+{% if errors is defined and errors %}
+{% for e in errors %}
+<tr>
+  <td colspan="7" class="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-mono">{{ e }}</td>
+</tr>
+{% endfor %}
+{% endif %}
 {% for s in snapshots %}
-<tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+<tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors {% if s.is_orphan %}bg-red-50/60 dark:bg-red-950/30{% endif %}">
+  <td class="px-3 py-2.5 w-8">
+    {% if s.is_orphan %}
+    <input type="checkbox" name="orphan-check" value="{{ s.dataset_path }}"
+           onchange="updateOrphanDelete()"
+           class="rounded border-red-300 dark:border-red-700 text-red-600 focus:ring-red-500 cursor-pointer">
+    {% endif %}
+  </td>
   <td class="px-4 py-2.5">
     {% set tier_colors = {
       "daily":   "text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 border-sky-200 dark:border-sky-800",
@@ -7,13 +28,22 @@
       "monthly": "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800",
       "annual":  "text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800"
     } %}
+    {% if s.tier %}
     <span class="text-xs font-medium border px-2 py-0.5 rounded-full {{ tier_colors.get(s.tier, 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700') }}">
       {{ s.tier }}
     </span>
+    {% else %}
+    <span class="text-xs text-zinc-400 italic">no snapshots</span>
+    {% endif %}
   </td>
   <td class="px-4 py-2.5 font-mono text-zinc-600 dark:text-zinc-300 text-xs">{{ s.date }}</td>
   <td class="px-4 py-2.5 text-zinc-500 text-xs">{{ s.class }}</td>
-  <td class="px-4 py-2.5 font-medium text-zinc-900 dark:text-white">{{ s.target }}</td>
+  <td class="px-4 py-2.5 font-medium {% if s.is_orphan %}text-red-700 dark:text-red-400{% else %}text-zinc-900 dark:text-white{% endif %}">
+    {{ s.target }}
+    {% if s.is_orphan %}
+    <span class="ml-1 text-xs font-normal text-red-500 dark:text-red-400" title="Target no longer in targets.yml">⚠ orphan</span>
+    {% endif %}
+  </td>
   <td class="px-4 py-2.5 text-xs">
     {% if s.exp_date is none %}
       <span class="text-zinc-400">Never</span>
@@ -24,16 +54,18 @@
     {% endif %}
   </td>
   <td class="px-4 py-2.5">
+    {% if not s.is_orphan %}
     <div class="flex gap-3">
       <a href="/browse?path={{ s.path | urlencode }}"
          class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">Browse</a>
       <a href="/restore?snapshot_path={{ s.path | urlencode }}"
          class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">Restore</a>
     </div>
+    {% endif %}
   </td>
 </tr>
 {% else %}
 <tr>
-  <td colspan="6" class="px-4 py-8 text-center text-zinc-400 text-sm">No snapshots found.</td>
+  <td colspan="7" class="px-4 py-8 text-center text-zinc-400 text-sm">No snapshots found.</td>
 </tr>
 {% endfor %}

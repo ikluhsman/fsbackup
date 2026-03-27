@@ -18,7 +18,7 @@ set -o pipefail
 
 CONFIG_FILE="/etc/fsbackup/targets.yml"
 LOG_DIR="/var/lib/fsbackup/log"
-LOG_FILE="${LOG_DIR}/backup.log"
+# LOG_FILE is set after --class is parsed (backup-<class>.log)
 NODE_TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
 
 BACKUP_SSH_USER="backup"
@@ -49,6 +49,7 @@ done
 
 [[ -n "$CLASS" ]] || usage
 mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_DIR}/backup-${CLASS}.log"
 
 PROM_FILE="${NODE_TEXTFILE_DIR}/fsbackup_runner_${CLASS}.prom"
 NOW_EPOCH="$(date +%s)"

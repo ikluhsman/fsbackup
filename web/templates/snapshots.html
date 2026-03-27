@@ -2,13 +2,25 @@
 {% block title %}Snapshots — fsbackup{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Snapshots</h1>
-  <p class="text-zinc-500 text-sm mt-1">{{ snapshots|length }} snapshot{{ 's' if snapshots|length != 1 }} found</p>
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Snapshots</h1>
+    <p class="text-zinc-500 text-sm mt-1">{{ snapshots|length }} snapshot{{ 's' if snapshots|length != 1 }} found</p>
+  </div>
+  {% if orphan_count > 0 %}
+  <a href="/snapshots?orphan_only=1&no_date=1"
+     class="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border {% if orphan_only %}bg-red-600 border-red-600 text-white{% else %}bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40{% endif %} transition-colors">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    {{ orphan_count }} orphan dataset{{ 's' if orphan_count != 1 }}
+  </a>
+  {% endif %}
 </div>
 
-<!-- Filters -->
-<div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 mb-6 shadow-sm">
+<!-- Filters (hidden in orphan view since the only filter that matters there is the orphan flag) -->
+{% if not orphan_only %}
+<div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 mb-4 shadow-sm">
   <form id="filter-form"
         class="flex flex-wrap gap-3 items-end"
         hx-get="/api/snapshots"
@@ -38,7 +50,6 @@
              autocomplete="off"
              placeholder="{% if filter_tier == 'daily' %}YYYY-MM-DD{% elif filter_tier == 'weekly' %}YYYY-Www{% elif filter_tier == 'monthly' %}YYYY-MM{% elif filter_tier == 'annual' %}YYYY{% else %}any{% endif %}"
              class="bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm font-mono rounded-lg px-3 py-1.5 w-36 focus:outline-none focus:border-brand-500"/>
-      <!-- Populated dynamically by onTierChange -->
       <datalist id="tier-dates">
         {% for d in tier_dates %}<option value="{{ d }}">{% endfor %}
       </datalist>
@@ -75,6 +86,32 @@
     </div>
   </form>
 </div>
+{% else %}
+<!-- Orphan toolbar -->
+<div class="flex items-center gap-3 px-4 py-2.5 mb-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-700 dark:text-red-400">
+  <input type="checkbox" id="select-all-orphans" onchange="toggleAllOrphans(this)"
+         class="rounded border-red-300 dark:border-red-700 text-red-600 focus:ring-red-500 cursor-pointer">
+  <label for="select-all-orphans" class="cursor-pointer select-none">Select all</label>
+  <span class="text-red-300 dark:text-red-700">|</span>
+  <span id="orphan-sel-count">0 selected</span>
+  <a href="/snapshots?no_date=1"
+     class="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline-offset-2 hover:underline ml-1">
+    Exit orphan view
+  </a>
+  <div class="ml-auto">
+    <button id="orphan-delete-btn"
+            type="button"
+            onclick="openOrphanDeleteModal()"
+            disabled
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+      </svg>
+      Delete datasets
+    </button>
+  </div>
+</div>
+{% endif %}
 
 <!-- Table -->
 <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
@@ -82,6 +119,7 @@
   <table class="w-full text-sm min-w-max">
     <thead>
       <tr class="border-b border-zinc-200 dark:border-zinc-800 text-left text-xs text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-zinc-800/50">
+        <th class="px-3 py-3 w-8"></th>
         <th class="px-4 py-3 font-medium">Tier</th>
         <th class="px-4 py-3 font-medium">Date</th>
         <th class="px-4 py-3 font-medium">Class</th>
@@ -94,6 +132,40 @@
       {% include "partials/snapshot_rows.html" %}
     </tbody>
   </table>
+  </div>
+</div>
+
+<!-- Orphan delete confirmation modal -->
+<div id="orphan-delete-modal"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+     onclick="if(event.target===this) closeOrphanDeleteModal()">
+  <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl w-full max-w-md p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      </svg>
+      <h3 class="text-sm font-semibold text-zinc-900 dark:text-white">Delete orphan datasets?</h3>
+    </div>
+    <p id="orphan-delete-msg" class="text-sm text-zinc-500 mb-2"></p>
+    <p class="text-xs text-red-500 mb-5">This permanently removes all snapshots in the selected datasets and cannot be undone.</p>
+    <form id="orphan-delete-form"
+          hx-post="/api/orphans/delete"
+          hx-target="#snapshot-rows"
+          hx-swap="innerHTML"
+          hx-on:htmx:after-request="closeOrphanDeleteModal(); updateOrphanDelete()">
+      <input type="hidden" name="orphan_only" value="1">
+      <div id="orphan-delete-paths"></div>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="closeOrphanDeleteModal()"
+                class="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors">
+          Delete
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -110,23 +182,67 @@
 
   function onTierChange(tier) {
     const dateInput = document.getElementById("filter-date");
-    const dateLabel = document.getElementById("date-label");
-
-    // Set sensible default date for the chosen tier
-    if (tier === "daily") {
-      dateInput.value = today;
-    } else {
-      dateInput.value = "";
+    if (dateInput) {
+      if (tier === "daily") {
+        dateInput.value = today;
+      } else {
+        dateInput.value = "";
+      }
+      dateInput.placeholder = datePlaceholders[tier] || "any";
     }
-
-    dateInput.placeholder = datePlaceholders[tier] || "any";
-
-    // Refresh the datalist options for this tier
     htmx.ajax("GET", "/api/tier-dates?tier=" + encodeURIComponent(tier), {
       target: "#tier-dates-wrapper",
       swap: "innerHTML",
     });
   }
+
+  // ---- Orphan selection ----
+
+  function getCheckedOrphans() {
+    return [...document.querySelectorAll('input[name="orphan-check"]:checked')];
+  }
+
+  function updateOrphanDelete() {
+    const checked = getCheckedOrphans();
+    const n = checked.length;
+    const btn = document.getElementById('orphan-delete-btn');
+    const counter = document.getElementById('orphan-sel-count');
+    const all = document.querySelectorAll('input[name="orphan-check"]');
+    const selectAll = document.getElementById('select-all-orphans');
+    if (btn) btn.disabled = n === 0;
+    if (counter) counter.textContent = n + ' selected';
+    if (selectAll && all.length > 0) selectAll.checked = n === all.length;
+  }
+
+  function toggleAllOrphans(cb) {
+    document.querySelectorAll('input[name="orphan-check"]').forEach(c => c.checked = cb.checked);
+    updateOrphanDelete();
+  }
+
+  function openOrphanDeleteModal() {
+    const checked = getCheckedOrphans();
+    const datasets = [...new Set(checked.map(c => c.value))];
+    const n = datasets.length;
+    document.getElementById('orphan-delete-msg').textContent =
+      `You are about to permanently delete ${n} orphan dataset${n === 1 ? '' : 's'} and all their snapshots. Are you sure?`;
+    const container = document.getElementById('orphan-delete-paths');
+    container.innerHTML = '';
+    datasets.forEach(path => {
+      const inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'paths'; inp.value = path;
+      container.appendChild(inp);
+    });
+    document.getElementById('orphan-delete-modal').classList.remove('hidden');
+    document.getElementById('orphan-delete-modal').classList.add('flex');
+  }
+
+  function closeOrphanDeleteModal() {
+    document.getElementById('orphan-delete-modal').classList.add('hidden');
+    document.getElementById('orphan-delete-modal').classList.remove('flex');
+  }
+
+  document.getElementById('snapshot-rows').addEventListener('htmx:afterSwap', updateOrphanDelete);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOrphanDeleteModal(); });
 </script>
 <!-- Hidden wrapper for datalist refresh -->
 <div id="tier-dates-wrapper" style="display:none"></div>

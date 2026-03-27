@@ -129,15 +129,35 @@ def expiration_date(tier: str, snapshot_date: date | None) -> date | None:
     return snapshot_date + timedelta(days=days)
 
 
-def list_snapshots(tier_filter=None, class_filter=None, target_filter=None, date_filter=None) -> list[dict]:
+def _valid_target_ids() -> set[str]:
+    """Return the set of all target IDs currently in targets.yml."""
+    targets = load_targets()
+    ids: set[str] = set()
+    for entries in targets.values():
+        if isinstance(entries, list):
+            for entry in entries:
+                if isinstance(entry, dict) and "id" in entry:
+                    ids.add(entry["id"])
+    return ids
+
+
+def list_snapshots(
+    tier_filter=None,
+    class_filter=None,
+    target_filter=None,
+    date_filter=None,
+    orphan_only: bool = False,
+) -> list[dict]:
     """Enumerate ZFS snapshots and return a list of snapshot dicts (v2.0).
 
     Snapshots are named <type>-<date> (e.g. daily-2026-03-23, weekly-2026-W12).
     Data is accessed via the .zfs/snapshot/ hidden directory on each dataset.
+    Each snapshot dict includes is_orphan=True when its target is no longer in targets.yml.
     """
     snapshots = []
     today = date.today()
     zfs_base = str(SNAPSHOT_ROOT).lstrip("/")
+    valid_ids = _valid_target_ids()
 
     try:
         result = subprocess.run(
@@ -165,6 +185,10 @@ def list_snapshots(tier_filter=None, class_filter=None, target_filter=None, date
         if tier not in TIERS:
             continue
 
+        is_orphan = target not in valid_ids
+
+        if orphan_only and not is_orphan:
+            continue
         if tier_filter and tier != tier_filter:
             continue
         if class_filter and cls != class_filter:
@@ -188,10 +212,34 @@ def list_snapshots(tier_filter=None, class_filter=None, target_filter=None, date
             "target":       target,
             "snapshot":     snapname,
             "path":         str(snap_data),
+            "dataset_path": str(SNAPSHOT_ROOT / cls / target),
             "snap_date":    snap_date,
             "exp_date":     exp_date,
             "expires_soon": expires_soon,
+            "is_orphan":    is_orphan,
         })
+
+    # Orphan datasets with zero snapshots won't appear in zfs list output.
+    # Add a synthetic row for each so they're visible and deletable.
+    if orphan_only:
+        seen_datasets = {s["dataset_path"] for s in snapshots}
+        for orphan in list_orphan_datasets():
+            dpath = str(SNAPSHOT_ROOT / orphan["class"] / orphan["target"])
+            if dpath not in seen_datasets:
+                snapshots.append({
+                    "tier":         "",
+                    "date":         "",
+                    "class":        orphan["class"],
+                    "target":       orphan["target"],
+                    "snapshot":     "",
+                    "path":         "",
+                    "dataset_path": dpath,
+                    "snap_date":    None,
+                    "exp_date":     None,
+                    "expires_soon": False,
+                    "is_orphan":    True,
+                })
+
     return snapshots
 
 
@@ -204,17 +252,10 @@ def load_targets() -> dict:
         return {}
 
 
-def list_orphan_snapshots() -> list[dict]:
+def list_orphan_datasets() -> list[dict]:
     """Return dataset dirs whose target ID is not in targets.yml.
     v2.0: SNAPSHOT_ROOT/class/target (depth 2, no tier/date dirs)."""
-    targets = load_targets()
-    valid_ids: set[str] = set()
-    for entries in targets.values():
-        if isinstance(entries, list):
-            for entry in entries:
-                if isinstance(entry, dict) and "id" in entry:
-                    valid_ids.add(entry["id"])
-
+    valid_ids = _valid_target_ids()
     orphans = []
     if not SNAPSHOT_ROOT.is_dir():
         return orphans
@@ -343,8 +384,13 @@ async def snapshots_page(
     target: str = "",
     snap_date: str = "",
     no_date: str = "",
+    orphan_only: str = "",
 ):
-    # Default date to today for daily tier, unless user explicitly cleared it
+    show_orphan_only = orphan_only == "1"
+    # In orphan view: clear tier/date filters so all snapshots for orphan datasets are shown
+    if show_orphan_only:
+        tier = ""
+        snap_date = ""
     today_str = date.today().strftime("%Y-%m-%d")
     if not snap_date and tier == "daily" and not no_date:
         snap_date = today_str
@@ -354,6 +400,7 @@ async def snapshots_page(
         class_filter=cls or None,
         target_filter=target or None,
         date_filter=snap_date or None,
+        orphan_only=show_orphan_only,
     )
     # Unique values for filter dropdowns
     all_targets = sorted({s["target"] for s in list_snapshots()})
@@ -362,6 +409,8 @@ async def snapshots_page(
         {s["date"] for s in list_snapshots(tier_filter=tier or None)},
         reverse=True,
     ) if tier else []
+    # Count orphan datasets for badge
+    orphan_count = len(list_orphan_datasets())
 
     return templates.TemplateResponse("snapshots.html", {
         "request":       request,
@@ -375,6 +424,8 @@ async def snapshots_page(
         "filter_target": target,
         "filter_date":   snap_date,
         "today_str":     today_str,
+        "orphan_only":   show_orphan_only,
+        "orphan_count":  orphan_count,
     })
 
 
@@ -603,49 +654,56 @@ async def utilities_page(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Orphan cleanup
+# Orphan dataset cleanup (called from the Snapshots view)
 # ---------------------------------------------------------------------------
 
-@app.get("/orphans", response_class=HTMLResponse)
-async def orphans_page(request: Request):
-    orphans = list_orphan_snapshots()
-    return _template_response("orphans.html", {"request": request, "orphans": orphans})
-
-
 @app.post("/api/orphans/delete", response_class=HTMLResponse)
-async def api_orphans_delete(request: Request, paths: list[str] = Form(...)):
-    """Delete selected orphan snapshot directories."""
+async def api_orphans_delete(
+    request: Request,
+    paths: list[str] = Form(...),
+    orphan_only: str = Form(default=""),
+):
+    """Delete selected orphan dataset directories and return updated snapshot rows."""
     errors: list[str] = []
     deleted: list[str] = []
 
+    # Deduplicate paths (multiple snapshot rows may map to the same dataset)
+    seen: set[str] = set()
     for raw_path in paths:
         p = Path(raw_path).resolve()
-        # Safety: must be under SNAPSHOT_ROOT, at least 2 levels deep (class/target)
-        in_allowed = p == SNAPSHOT_ROOT or p.is_relative_to(SNAPSHOT_ROOT)
+        if str(p) in seen:
+            continue
+        seen.add(str(p))
+        # Safety: must be under SNAPSHOT_ROOT, exactly 2 levels deep (class/target)
+        in_allowed = p.is_relative_to(SNAPSHOT_ROOT)
         depth = len(p.parts) - len(SNAPSHOT_ROOT.parts)
-        if not in_allowed or depth < 2:
+        if not in_allowed or depth != 2:
             errors.append(f"Refused: {raw_path}")
             continue
+        # ZFS datasets must be destroyed with `zfs destroy -r`, not rmtree.
+        # Dataset name = filesystem path with leading / stripped.
+        # Runs via sudo — see /etc/sudoers.d/fsbackup-zfs-destroy.
+        zfs_dataset = str(p).lstrip("/")
         try:
-            shutil.rmtree(p)
-            deleted.append(str(p))
+            r = subprocess.run(
+                ["sudo", "zfs", "destroy", "-r", zfs_dataset],
+                capture_output=True, text=True, timeout=30,
+            )
+            if r.returncode == 0:
+                deleted.append(str(p))
+            else:
+                errors.append(f"{p.name}: {r.stderr.strip() or r.stdout.strip()}")
         except Exception as e:
             errors.append(f"{p.name}: {e}")
 
-    orphans = list_orphan_snapshots()
-
-    # Update the Prometheus orphan metric so the dashboard reflects the deletion
+    # Update orphan metric immediately so alerting reflects the deletion
     if deleted:
         try:
-            counts: dict[str, int] = {"primary": 0, "mirror": 0}
-            for o in orphans:
-                counts[o["root"]] = counts.get(o["root"], 0) + 1
+            remaining = list_orphan_datasets()
+            count = len(remaining)
             prom_path = PROM_DIR / "fsbackup_orphans.prom"
             tmp = prom_path.with_suffix(".prom.tmp")
-            tmp.write_text(
-                f'fsbackup_orphan_snapshots_total{{root="primary"}} {counts["primary"]}\n'
-                f'fsbackup_orphan_snapshots_total{{root="mirror"}} {counts["mirror"]}\n'
-            )
+            tmp.write_text(f"fsbackup_orphan_snapshots_total {count}\n")
             try:
                 import grp
                 gid = grp.getgrnam("nodeexp_txt").gr_gid
@@ -655,13 +713,16 @@ async def api_orphans_delete(request: Request, paths: list[str] = Form(...)):
             tmp.chmod(0o644)
             tmp.rename(prom_path)
         except Exception:
-            pass  # non-fatal — metric will self-correct on next doctor run
+            pass  # non-fatal — metric self-corrects on next doctor run
 
-    return _template_response("partials/orphan_table.html", {
-        "request": request,
-        "orphans": orphans,
-        "deleted": deleted,
-        "errors":  errors,
+    show_orphan_only = orphan_only == "1"
+    snaps = list_snapshots(orphan_only=show_orphan_only)
+    return _template_response("partials/snapshot_rows.html", {
+        "request":        request,
+        "snapshots":      snaps,
+        "orphan_only":    show_orphan_only,
+        "deleted":        deleted,
+        "errors":         errors,
     })
 
 
@@ -669,16 +730,13 @@ async def api_orphans_delete(request: Request, paths: list[str] = Form(...)):
 # Logs page
 # ---------------------------------------------------------------------------
 
-# Log sections shown on /logs — (unit_key, label, description)
+# Log sections shown on /logs — (unit_key, label, log_filename)
 _LOG_SECTIONS = [
-    ("fsbackup-runner@class1.service",      "Backup — class1",       "backup.log"),
-    ("fsbackup-runner@class2.service",      "Backup — class2",       "backup.log"),
-    ("fsbackup-runner@class3.service",      "Backup — class3",       "backup.log"),
-    ("fsbackup-mirror-daily.service",       "Mirror (daily)",        "mirror.log"),
-    ("fsbackup-mirror-retention.service",   "Mirror retention",      "mirror-retention.log"),
-    ("fsbackup-s3-export.service",          "S3 export",             "s3-export.log"),
-    ("fsbackup-orphans",                    "Orphan scan",           "fs-orphans.log"),
-    ("fsbackup-annual-promote.service",     "Annual promote",        "annual-promote.log"),
+    ("fsbackup-runner-daily@class1.service",   "Backup — class1",   "backup-class1.log"),
+    ("fsbackup-runner-daily@class2.service",   "Backup — class2",   "backup-class2.log"),
+    ("fsbackup-runner-daily@class3.service",   "Backup — class3",   "backup-class3.log"),
+    ("fsbackup-s3-export.service",             "S3 export",         "s3-export.log"),
+    ("fsbackup-doctor@class1.service",         "Doctor — class1",   "fs-orphans.log"),
 ]
 
 
@@ -1008,17 +1066,21 @@ async def api_snapshots(
     cls: str = "",
     target: str = "",
     snap_date: str = "",
+    orphan_only: str = "",
 ):
     """Return just the snapshot table rows for HTMX filter updates."""
+    show_orphan_only = orphan_only == "1"
     snaps = list_snapshots(
         tier_filter=tier or None,
         class_filter=cls or None,
         target_filter=target or None,
         date_filter=snap_date or None,
+        orphan_only=show_orphan_only,
     )
     return templates.TemplateResponse("partials/snapshot_rows.html", {
-        "request":   request,
-        "snapshots": snaps,
+        "request":     request,
+        "snapshots":   snaps,
+        "orphan_only": show_orphan_only,
     })
 
 
@@ -1067,19 +1129,20 @@ async def api_browse(request: Request, path: str = ""):
 
 _LOG_DIR = Path("/var/lib/fsbackup/log")
 
-# Map unit name prefixes to their log files (most specific first).
+# Map unit name prefixes/patterns to their log files (most specific first).
+# Runner units are per-class: fsbackup-runner-{type}@{class}.service → backup-{class}.log
 _UNIT_LOG_MAP = [
-    ("fsbackup-runner@",          _LOG_DIR / "backup.log"),
-    ("fsbackup-promote",          _LOG_DIR / "backup.log"),
-    ("fsbackup-doctor@",          _LOG_DIR / "fs-orphans.log"),
-    ("fsbackup-mirror-daily",     _LOG_DIR / "mirror.log"),
-    ("fsbackup-mirror-retention", _LOG_DIR / "mirror-retention.log"),
-    ("fsbackup-s3-export",        _LOG_DIR / "s3-export.log"),
-    ("fsbackup-annual-promote",   _LOG_DIR / "annual-promote.log"),
-    ("fsbackup-orphans",          _LOG_DIR / "fs-orphans.log"),
+    ("fsbackup-s3-export",   _LOG_DIR / "s3-export.log"),
+    ("fsbackup-doctor@",     _LOG_DIR / "fs-orphans.log"),
+    ("fsbackup-scrub",       _LOG_DIR / "s3-export.log"),  # scrub logs to s3 file for now
 ]
 
 def _unit_log_file(unit: str) -> Path | None:
+    # Per-class runner log: fsbackup-runner-{daily|weekly|monthly}@class{N}.service
+    if unit.startswith("fsbackup-runner-"):
+        for cls in CLASSES:
+            if f"@{cls}" in unit:
+                return _LOG_DIR / f"backup-{cls}.log"
     for prefix, path in _UNIT_LOG_MAP:
         if unit.startswith(prefix):
             return path

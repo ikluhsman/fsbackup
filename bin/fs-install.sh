@@ -32,7 +32,7 @@ echo "  1. Install required packages"
 echo "  2. Create the fsbackup system user (UID ${FSBACKUP_UID})"
 echo "  3. Install scripts to ${INSTALL_DIR}"
 echo "  4. Create config skeleton in ${CONF_DIR}"
-echo "  5. Set up ZFS delegation (zfs allow)"
+echo "  5. Set up ZFS delegation (zfs allow) and sudoers drop-in"
 echo "  6. Install and enable systemd units"
 echo "  7. Apply schedule from fsbackup.conf"
 echo "  8. Set up the web UI"
@@ -163,6 +163,20 @@ else
     warn "ZFS dataset '${ZFS_DATASET}' not found — create the pool first, then run:"
     warn "  sudo zfs allow ${FSBACKUP_USER} create,snapshot,mount,destroy ${ZFS_DATASET}"
     warn "  sudo chown -R ${FSBACKUP_USER}:${FSBACKUP_USER} ${SNAPSHOT_ROOT}"
+fi
+
+# sudoers drop-in: allow fsbackup to run `zfs destroy -r` on its own datasets.
+# Required by the web UI orphan-delete feature (web process runs as fsbackup,
+# not root, and zfs destroy requires elevated privileges even with zfs allow).
+SUDOERS_FILE="/etc/sudoers.d/fsbackup-zfs-destroy"
+SUDOERS_LINE="${FSBACKUP_USER} ALL=(root) NOPASSWD: /usr/sbin/zfs destroy -r ${ZFS_DATASET}/*/*"
+echo "$SUDOERS_LINE" > "$SUDOERS_FILE"
+chmod 0440 "$SUDOERS_FILE"
+if visudo -c -f "$SUDOERS_FILE" &>/dev/null; then
+    ok "sudoers drop-in written: ${SUDOERS_FILE}"
+else
+    warn "sudoers syntax check failed — removing ${SUDOERS_FILE}"
+    rm -f "$SUDOERS_FILE"
 fi
 echo
 
