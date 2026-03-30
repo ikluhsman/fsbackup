@@ -1,36 +1,52 @@
 # fsbackup
 
-fsbackup is a pull-based snapshot backup system for home lab Linux servers. The backup host connects outbound over SSH to each source host, pulls data with rsync, and stores point-in-time snapshots organized by date and tier. Snapshots are mirrored to a second local drive and optionally exported to encrypted offsite archives in S3. A [browser-based web UI](#web-ui) provides monitoring, snapshot browsing, and restore — including an S3 bucket browser.
+fsbackup is a pull-based ZFS snapshot backup system for home lab Linux servers. The backup host connects outbound over SSH to each source host, pulls data with rsync, and stores point-in-time snapshots as ZFS snapshots. Snapshots are optionally exported to encrypted offsite archives in S3. A [browser-based web UI](#web-ui) provides monitoring, snapshot browsing, and restore — including an S3 bucket browser.
 
-fsbackup runs as a Docker container (supercronic scheduler + FastAPI web UI). See [Docker deployment](docs/docker.md) for setup instructions.
+fsbackup runs bare-metal as systemd services (no Docker, no supercronic). See [Installation](docs/installation.md) for setup.
 
 ---
 
 ## Features
 
-fsbackup is designed around the [3-2-1 backup rule](https://www.backblaze.com/blog/the-3-2-1-backup-strategy/): **3** copies of your data, on **2** different storage media, with **1** copy offsite. Primary snapshots live on the backup server's dedicated drive (copy 1), a second local drive holds a mirror (copy 2, separate media), and S3 export provides the offsite copy (copy 3).
-
-- **Disk-to-disk snapshots over SSH** — pull-based rsync; the backup server initiates all connections, source hosts need no special configuration beyond a read-only `backup` user
-- **Space-efficient snapshot storage** — each snapshot hardlinks unchanged files from the previous run via rsync `--link-dest`; a full snapshot tree costs only the space of changed files
-- **Multi-tier retention** — daily snapshots promote automatically to weekly, monthly, and annual tiers; each tier is independently pruned on a configurable schedule
-- **Mirror to a second drive** — all snapshots are rsynced to a secondary local drive for an additional layer of redundancy; per-class mirror exclusions are supported
-- **Database export tool** — `fs-db-export.sh` dumps PostgreSQL, MySQL, and MariaDB databases to a staging directory before backup runs, ensuring the snapshot captures a consistent, closed database file rather than live data
+- **Disk-to-disk snapshots over SSH** — pull-based rsync; the backup server initiates all connections, source hosts need only a read-only `backup` user
+- **ZFS-native snapshot storage** — each backup run takes a ZFS snapshot (`@daily-YYYY-MM-DD`, `@weekly-YYYY-Www`, `@monthly-YYYY-MM`) on a per-target dataset; snapshots are space-efficient via ZFS copy-on-write and accessible read-only under `.zfs/snapshot/`
+- **Multi-class scheduling** — daily, weekly, and monthly snapshot types per class; schedules are defined in `fsbackup.conf` and applied to systemd timers via `fs-schedule-apply.sh`
+- **Configurable retention** — `fs-retention.sh` prunes old ZFS snapshots per class per KEEP_* policy (daily/weekly/monthly)
+- **Database export tool** — `fs-db-export.sh` dumps PostgreSQL, MySQL, and MariaDB databases to a staging directory before backup runs, ensuring a consistent, closed database file in the snapshot
 - **Encrypted offsite export to S3** — weekly, monthly, and annual snapshots are compressed with zstd, encrypted end-to-end with [age](https://github.com/FiloSottile/age), and uploaded to Amazon S3; the private key never touches the backup server
 - **S3 lifecycle management** — retention on S3 is handled entirely by prefix-based lifecycle rules; the export script never deletes anything
-- **Web UI** — FastAPI + HTMX dashboard for monitoring backup health, browsing the snapshot tree, running jobs on demand, and initiating restores; includes an S3 bucket browser with one-click restore command generation
+- **Web UI** — FastAPI + HTMX dashboard for monitoring backup health, browsing snapshots, running jobs on demand, and initiating restores; includes an S3 bucket browser with one-click restore command generation
 - **Prometheus metrics + Grafana dashboard** — every script emits textfile collector metrics covering snapshot size, file deltas, transfer bytes, exit codes, and timing; a pre-built Grafana dashboard is included
-- **Health checks** — `fs-doctor.sh` verifies SSH connectivity, validates source paths, detects orphaned snapshot directories, and checks annual snapshot immutability before each backup window
+- **Health checks** — `fs-doctor.sh` verifies SSH connectivity, validates source paths, and detects orphaned datasets before each backup window
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Snapshots** | [ZFS](https://openzfs.org/) — copy-on-write snapshots, dataset-per-target layout |
+| **Data transfer** | [rsync](https://rsync.samba.org/) over SSH — pull-based, incremental |
+| **Scheduling** | [systemd](https://systemd.io/) timers — per-class instances, `OnCalendar=` schedules |
+| **Encryption (offsite)** | [age](https://github.com/FiloSottile/age) — modern, audited encryption for S3 archives |
+| **Compression (offsite)** | [zstd](https://facebook.github.io/zstd/) — fast compression before S3 upload |
+| **Offsite storage** | [Amazon S3](https://aws.amazon.com/s3/) with prefix-based lifecycle rules |
+| **Web UI backend** | [FastAPI](https://fastapi.tiangolo.com/) — async Python, serving HTMX partials |
+| **Web UI frontend** | [HTMX](https://htmx.org/) + [Tailwind CSS](https://tailwindcss.com/) (CDN) — no build step |
+| **Metrics** | [Prometheus](https://prometheus.io/) textfile collector via [node_exporter](https://github.com/prometheus/node_exporter) |
+| **Dashboards** | [Grafana](https://grafana.com/) — pre-built dashboard included in `conf/` |
+| **Config** | YAML (`targets.yml`) + bash (`fsbackup.conf`) |
+| **Language** | Bash (scripts) + Python 3.12 (web UI) |
 
 ---
 
 ## How it works
 
 1. A `backup` user is created on each source host with read-only SSH access to the directories being backed up.
-2. The backup host runs rsync over SSH, pulling data into dated snapshot directories.
-3. Each new daily snapshot uses rsync's `--link-dest` option so unchanged files are hardlinked rather than copied, keeping storage usage low.
-4. Older snapshots are promoted to weekly, monthly, and annual tiers on a schedule, then pruned when they age out.
-5. The secondary drive (`/backup2`) is kept in sync as a mirror.
-6. Prometheus metrics are written after each run so Grafana can show backup health at a glance.
+2. The backup host runs rsync over SSH, pulling data into a per-target ZFS dataset (`backup/snapshots/<class>/<target>`).
+3. After a successful rsync, a ZFS snapshot is taken on the dataset (e.g. `@daily-2026-03-29`). Unchanged blocks are shared automatically by ZFS copy-on-write — no hardlink bookkeeping needed.
+4. `fs-retention.sh` prunes snapshots older than the configured KEEP_* limits using `zfs destroy`.
+5. Prometheus metrics are written after each run so Grafana can show backup health at a glance.
 
 ---
 
@@ -41,7 +57,7 @@ fsbackup is designed around the [3-2-1 backup rule](https://www.backblaze.com/bl
 - [Repository layout](#repository-layout)
 - [Data classes](#data-classes)
 - [Snapshot layout](#snapshot-layout)
-- [Scripts — automated](#scripts--automated-run-by-supercronic)
+- [Scripts — automated](#scripts--automated-run-by-systemd)
 - [Scripts — manual use](#scripts--manual-use-administrative-utilities)
 - [Remote scripts](#remote-scripts)
 - [S3 cloud export](#s3-cloud-export)
@@ -65,7 +81,7 @@ fsbackup includes a browser-based UI for monitoring backup status, browsing snap
 
 ![Targets](docs/screenshots/fsb_targets.png)
 
-**Snapshots** — browse available snapshots by tier, class, and date:
+**Snapshots** — browse available snapshots by class and date; orphaned datasets are highlighted inline:
 
 ![Snapshots](docs/screenshots/fsb_snapshots.png)
 
@@ -94,13 +110,12 @@ fsbackup includes a browser-based UI for monitoring backup status, browsing snap
 ## Repository layout
 
 ```
-bin/        Scripts run automatically by supercronic (scheduler inside the container)
-docker/     Docker entrypoint script
+bin/        Scripts run automatically by systemd timers
 utils/      Manual-use administrative tools
 remote/     Scripts that run ON source hosts (not the backup server)
 s3/         S3 cloud export
-systemd/    Systemd unit files (reference only — not used in Docker deployment)
-conf/       Configuration templates and examples
+systemd/    Systemd service and timer unit files
+conf/       Configuration templates, examples, and Grafana dashboard
 web/        FastAPI + HTMX web UI
 docs/       Detailed documentation
 ```
@@ -111,54 +126,58 @@ docs/       Detailed documentation
 
 Targets (individual backup jobs) are grouped into classes. Each class has its own schedule and retention policy.
 
-| Class | What it covers | Schedule | Tiers |
-|-------|---------------|----------|-------|
-| class1 | Application data, databases, personal files | Daily | daily / weekly / monthly / annual |
+| Class | What it covers | Schedule | Snapshot types |
+|-------|---------------|----------|----------------|
+| class1 | Application data, databases, personal files | Daily | daily / weekly / monthly |
 | class2 | Infrastructure config (Docker stacks, nginx, DNS, etc.) | Daily | daily / weekly / monthly |
-| class3 | Photo archives from `/share/pictures` | Monthly (1st of each month) | monthly only |
+| class3 | Photo archives and large infrequently-changed data | Monthly (1st of each month) | monthly only |
 
-class3 is not mirrored to the secondary drive (too large; backed up separately to M-DISC and USB).
+class3 is not included in S3 export. Offsite copies are made manually to USB and M-DISC.
 
 ---
 
 ## Snapshot layout
 
-Snapshots are stored under `/backup/snapshots/` and mirrored to `/backup2/snapshots/`.
+Snapshots are ZFS datasets and snapshots under the configured `SNAPSHOT_ROOT` (default `/backup/snapshots`).
 
 ```
-/backup/snapshots/
-  daily/    YYYY-MM-DD/
-              class1/<target>/
-              class2/<target>/
-  weekly/   YYYY-Www/          (e.g. 2026-W09)
-              class1/<target>/
-              class2/<target>/
-  monthly/  YYYY-MM/
-              class1/<target>/
-              class2/<target>/
-              class3/<target>/
-  annual/   YYYY/              (class1 only, promoted each January from prior December)
-              class1/<target>/
+backup/snapshots/              ← ZFS parent dataset
+  class1/
+    paperlessngx.db/           ← ZFS dataset per target
+      @daily-2026-03-29        ← ZFS snapshot
+      @weekly-2026-W13
+      @monthly-2026-03
+    homeassistant.db/
+      @daily-2026-03-29
+      ...
+  class2/
+    nginx.config/
+      @daily-2026-03-29
+      ...
+  class3/
+    photos/
+      @monthly-2026-03
+      ...
 ```
+
+Snapshot contents are accessible read-only at `<dataset>/.zfs/snapshot/<name>/`.
 
 ---
 
-## Scripts — automated (run by supercronic)
+## Scripts — automated (run by systemd)
 
-These scripts are called by supercronic on a schedule. You generally don't run them by hand, though you can pass `--dry-run` to test without making changes. To run manually: `docker exec -it fsbackup /opt/fsbackup/bin/<script> ...`
+These scripts are called by systemd timers on a schedule. You generally don't run them by hand, though most support `--dry-run`. To run manually: `sudo -u fsbackup /opt/fsbackup/bin/<script> ...`
 
 Repository path: **bin/**
 
 | Filename | Name | Description |
 |----------|------|-------------|
-| `fs-runner.sh` | Take a snapshot | Connects to each target over SSH and rsyncs a new snapshot. Unchanged files are hardlinked to the previous snapshot. Writes Prometheus metrics. |
-| `fs-doctor.sh` | Health check | Checks SSH connectivity, source paths, and snapshot directories. Reports orphaned targets and verifies snapshot immutability. |
-| `fs-promote.sh` | Promote snapshots | Promotes qualifying daily snapshots to weekly and weekly to monthly. Runs nightly after the backup cycle. |
-| `fs-annual-promote.sh` | Annual promotion | Promotes the prior December monthly snapshot to the `annual/` tier (class1 only). Runs January 5th. |
-| `fs-retention.sh` | Prune old snapshots | Deletes snapshots past retention limits on primary storage (14d daily / 8w weekly / 12m monthly). |
-| `fs-mirror.sh` | Sync to mirror drive | Rsyncs primary snapshots to the secondary drive. Runs in `daily` or `promote` mode. Skips classes in `MIRROR_SKIP_CLASSES`. |
-| `fs-mirror-retention.sh` | Prune mirror snapshots | Prunes old snapshots on the mirror drive (14d / 12w / 24m). |
-| `fs-db-export.sh` | Export databases | Dumps databases via `docker exec` to an export directory before backup runs, ensuring a consistent snapshot. Requires Docker socket mount. |
+| `fs-runner.sh` | Take a snapshot | Connects to each target over SSH, rsyncs data into the target's ZFS dataset, then takes a ZFS snapshot. Writes Prometheus metrics. |
+| `fs-doctor.sh` | Health check | Checks SSH connectivity, source paths, and ZFS datasets. Detects orphaned datasets (targets removed from `targets.yml` with remaining datasets). |
+| `fs-retention.sh` | Prune old snapshots | Destroys ZFS snapshots older than the configured KEEP_* limits per class per snapshot type. |
+| `fs-db-export.sh` | Export databases | Dumps databases via `docker exec` to an export directory before backup runs, ensuring a consistent snapshot. Runs as root. |
+| `fs-install.sh` | Bare-metal installer | Installs fsbackup to `/opt/fsbackup`, creates the `fsbackup` user, configures ZFS delegation, sudoers drop-in, and systemd units. |
+| `fs-schedule-apply.sh` | Apply schedule | Writes `OnCalendar=` systemd drop-in overrides from `CLASS*_*_SCHEDULE` variables in `fsbackup.conf`. |
 
 ---
 
@@ -170,11 +189,9 @@ Repository path: **utils/**
 
 | Filename | Name | Description | Parameters |
 |----------|------|-------------|------------|
-| `fs-restore.sh` | Restore files | Browse available snapshots and restore files to a local path or push to a remote host over SSH. See the [Restore](#restore) section for full usage. | `list --type <tier> [--class <class>] [--date <key>]`; `restore --type <tier> --class <class> --id <id> [--date <key>\|--latest] --to <path>` |
+| `fs-restore.sh` | Restore files | Browse available snapshots and restore files to a local path or push to a remote host over SSH. See the [Restore](#restore) section. | `list --class <class> [--type <type>]`; `restore --class <class> --id <id> [--date <key>\|--latest] --to <path>` |
 | `fs-trust-host.sh` | Seed SSH host keys | Adds a host's SSH key to the backup user's `known_hosts`. Run once when adding a new host. | `<hostname>` |
-| `fs-nodeexp-fix.sh` | Fix metric file permissions | Repairs ownership and permissions on node_exporter textfile collector files if they become unreadable. Optionally grants read ACLs to the web UI user. | `[--web-user <username>]` |
-| `fs-annual-mirror-check.sh` | Verify annual mirror sync | Checks that annual snapshots on the primary drive are present on the mirror. Run after the January annual promotion. | none |
-| `fs-target-rename.sh` | Rename a target | Renames a target directory across all snapshot tiers on both primary and mirror storage. Use when a target ID changes in `targets.yml`. | `--class <class> --from <old-id> --to <new-id> --move\|--delete` |
+| `fs-target-rename.sh` | Rename a target | Renames (or deletes) a ZFS dataset when a target ID changes in `targets.yml`. | `--class <class> --from <old-id> --to <new-id> --move\|--delete` |
 
 ---
 
@@ -187,16 +204,16 @@ Repository path: **remote/**
 | Filename | Name | Description | Parameters |
 |----------|------|-------------|------------|
 | `fsbackup_remote_init.sh` | Set up source host | Creates the `backup` user, configures SSH authorized keys, and sets read-only ACLs on paths to be backed up. Run once per new source host. | `--pubkey-file <file>` or `--pubkey <key>`, `--backup-user <user>`, `--allow-path <path>` (repeatable) |
-| `fs-prometheus-prebackup.sh` | Prometheus pre-backup snapshot | Calls the Prometheus HTTP API to snapshot its data directory before backup runs. Deploy and run on the host running Prometheus. | none |
-| `fs-victoriametrics-prebackup.sh` | VictoriaMetrics pre-backup snapshot | Calls the VictoriaMetrics API to snapshot its data directory before backup runs. Deploy and run on the host running VictoriaMetrics. | none |
+| `fs-prometheus-prebackup.sh` | Prometheus pre-backup snapshot | Calls the Prometheus HTTP API to snapshot its data directory before backup runs. | none |
+| `fs-victoriametrics-prebackup.sh` | VictoriaMetrics pre-backup snapshot | Calls the VictoriaMetrics API to snapshot its data directory before backup runs. | none |
 
 ---
 
 ## S3 cloud export
 
-`s3/fs-export-s3.sh` compresses, encrypts, and uploads snapshots to Amazon S3 for offsite storage. Weekly, monthly, and annual snapshots are exported; daily snapshots and class3 are not. Files are encrypted with [age](https://github.com/FiloSottile/age) before upload so S3 never holds readable data. Retention is managed entirely by S3 lifecycle rules — the script never deletes anything.
+`s3/fs-export-s3.sh` compresses, encrypts, and uploads snapshots to Amazon S3 for offsite storage. Weekly and monthly snapshots are exported; daily snapshots and class3 are not. Files are encrypted with [age](https://github.com/FiloSottile/age) before upload so S3 never holds readable data. Retention is managed entirely by S3 lifecycle rules — the script never deletes anything.
 
-Called by: supercronic at 04:30 daily, after mirror-promote.
+Called by: `fsbackup-s3-export.timer` (systemd).
 
 ### S3 setup
 
@@ -270,7 +287,7 @@ aws s3api put-bucket-lifecycle-configuration \
   }'
 ```
 
-Objects under `annual/` have no expiration rule and are kept indefinitely. The `abort-incomplete-multipart` rule automatically cleans up abandoned upload parts (from interrupted uploads) within 3 days, preventing orphaned data from accumulating in the bucket and incurring storage charges.
+Objects under `annual/` have no expiration rule and are kept indefinitely. The `abort-incomplete-multipart` rule automatically cleans up abandoned upload parts within 3 days.
 
 **4. Create the IAM policy and upload user**
 
@@ -318,29 +335,23 @@ S3_BUCKET="fsbackup-snapshots-SUFFIX"
 S3_SKIP_CLASSES="class3"
 ```
 
-The S3 export runs automatically via supercronic at 04:30 daily once the container is running.
-
 ---
 
 ## Daily schedule
 
+All times are approximate; systemd timers use `RandomizedDelaySec` to avoid thundering herd.
+
 | Time | Job |
 |------|-----|
 | 01:17 | Doctor — class1 |
-| 01:40 | DB export — paperlessngx |
-| 01:49 | Runner — class1 |
+| 01:40 | DB export — paperless |
+| 01:49 | Runner — class1 (daily) |
 | 02:05 | Doctor — class2 |
-| 02:15 | Runner — class2 |
-| 02:30 | Mirror — daily sync |
+| 02:15 | Runner — class2 (daily) |
 | 03:00 | Retention |
-| 03:30 | Promote |
-| 03:40 | Mirror — post-promote sync |
-| 04:00 | Mirror retention |
 | 04:30 | S3 export |
 
-class3 (photos) runs on the 1st of each month: doctor at 04:15, runner at 04:45.
-
-Annual promotion runs once per year on January 5th.
+Weekly and monthly runner instances fire on the configured day/date (Monday for weekly, 1st of month for monthly). class3 runs monthly: doctor at 04:15, runner at 04:45 on the 1st.
 
 ---
 
@@ -350,56 +361,57 @@ All metrics are written as textfile collector `.prom` files to `/var/lib/node_ex
 
 ### Snapshot metrics (`fs-runner.sh`)
 
-These are written per-target after each snapshot run.
-
 | Metric | Labels | Description |
 |--------|--------|-------------|
 | `fsbackup_snapshot_last_success` | `class`, `target` | Unix timestamp of the last successful snapshot |
 | `fsbackup_snapshot_last_failure` | `class`, `target` | Unix timestamp of the last failed snapshot attempt |
-| `fsbackup_snapshot_bytes` | `class`, `target` | Total size of the snapshot directory in bytes (via `du`) |
+| `fsbackup_snapshot_bytes` | `class`, `target` | Total size of the ZFS dataset in bytes |
 | `fsbackup_snapshot_files_total` | `class`, `target` | Total number of files in the snapshot |
 | `fsbackup_snapshot_files_created` | `class`, `target` | Files added compared to the previous snapshot |
 | `fsbackup_snapshot_files_deleted` | `class`, `target` | Files removed compared to the previous snapshot |
-| `fsbackup_snapshot_transferred_bytes` | `class`, `target` | Bytes actually changed and transferred (the true delta; excludes hardlinked unchanged files) |
+| `fsbackup_snapshot_transferred_bytes` | `class`, `target` | Bytes actually transferred (the true delta) |
 | `fsbackup_runner_target_last_seen` | `class`, `target` | Unix timestamp of the last run attempt, success or failure |
 | `fsbackup_runner_target_last_exit_code` | `class`, `target` | rsync exit code of the last run (0 = success) |
-| `fsbackup_runner_target_failures_total` | `class`, `target` | Monotonically increasing failure count per target (counter; resets on process restart) |
+| `fsbackup_runner_target_failures_total` | `class`, `target` | Monotonically increasing failure count per target (counter) |
 | `fsbackup_runner_success` | `class` | Number of targets that succeeded in the last full class run |
 | `fsbackup_runner_failed` | `class` | Number of targets that failed in the last full class run |
 | `fsbackup_runner_last_exit_code` | `class` | Overall exit code for the class run (0 = all succeeded, 1 = any failed) |
-| `fsbackup_runner_run_scope` | `class` | 1 = full class run, 0 = single-target run (affects whether class-level metrics were updated) |
+| `fsbackup_runner_run_scope` | `class` | 1 = full class run, 0 = single-target run |
 
 ### Doctor metrics (`fs-doctor.sh`)
 
-Written after each doctor run.
-
 | Metric | Labels | Description |
 |--------|--------|-------------|
-| `fsbackup_orphan_snapshots_total` | `root` | Count of snapshot directories belonging to targets no longer in `targets.yml`. Root is `primary` or `mirror`. Alert if > 0. |
-| `fsbackup_annual_immutable` | `root` | 1 if all annual snapshot directories are immutable (chattr +i), 0 if any are writable. Root is `primary` or `mirror`. |
+| `fsbackup_orphan_snapshots_total` | — | Count of ZFS datasets belonging to targets no longer in `targets.yml`. Alert if > 0. |
 | `fsbackup_doctor_duration_seconds` | `class` | How long the doctor run took, in seconds |
 
-### Mirror metrics (`fs-mirror.sh`)
-
-Written after each mirror run. Mode is `daily` or `promote`.
+### Retention metrics (`fs-retention.sh`)
 
 | Metric | Labels | Description |
 |--------|--------|-------------|
-| `fsbackup_mirror_last_success` | `mode` | Unix timestamp of the last mirror run |
-| `fsbackup_mirror_last_exit_code` | `mode` | Exit code of the last mirror run (0 = success) |
-| `fsbackup_mirror_bytes_total` | `mode` | Total bytes present in the mirrored scope after the run |
-| `fsbackup_mirror_duration_seconds` | `mode` | Duration of the mirror run in seconds |
+| `fsbackup_retention_last_run_seconds` | — | Unix timestamp of the last retention run |
+| `fsbackup_retention_last_exit_code` | — | Exit code of the last retention run (0 = success) |
+| `fsbackup_retention_destroyed_total` | — | ZFS snapshots destroyed in this run |
+| `fsbackup_retention_kept_total` | — | ZFS snapshots kept (within policy) |
+| `fsbackup_retention_failed_total` | — | ZFS snapshots that failed to destroy |
+| `fsbackup_retention_duration_seconds` | — | Duration of the retention run in seconds |
+
+### DB export metrics (`fs-db-export.sh`)
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `fsbackup_db_export_success` | `db`, `engine`, `host` | 1 if export succeeded, 0 if failed |
+| `fsbackup_db_export_last_timestamp` | `db`, `engine`, `host` | Unix timestamp of the export run |
+| `fsbackup_db_export_size_bytes` | `db`, `engine`, `host` | Size of the compressed export file |
 
 ### S3 export metrics (`fs-export-s3.sh`)
-
-Written after each S3 export run.
 
 | Metric | Labels | Description |
 |--------|--------|-------------|
 | `fsbackup_s3_last_success` | — | Unix timestamp of the last S3 export run completion |
 | `fsbackup_s3_last_exit_code` | — | 0 if all uploads succeeded, 1 if any failed |
 | `fsbackup_s3_uploaded_total` | — | Number of archives uploaded in this run |
-| `fsbackup_s3_skipped_total` | — | Number of archives skipped because they already existed in S3 |
+| `fsbackup_s3_skipped_total` | — | Number of archives skipped (already in S3) |
 | `fsbackup_s3_failed_total` | — | Number of archives that failed to upload |
 | `fsbackup_s3_bytes_total` | — | Bytes uploaded in this run |
 | `fsbackup_s3_duration_seconds` | — | Duration of the S3 export run in seconds |
@@ -410,78 +422,57 @@ Written after each S3 export run.
 
 ## Restore
 
-Use `utils/fs-restore.sh` via `docker exec` or directly as the `fsbackup` user. Restored files land in `/restore` inside the container, which maps to `/backup/restore` on the host.
+Use `utils/fs-restore.sh` directly as the `fsbackup` user. Snapshots are accessible read-only under `<dataset>/.zfs/snapshot/<name>/`.
 
 ### Browse available snapshots
 
 ```bash
-# List available date keys for a tier
-fs-restore.sh list --type daily
-fs-restore.sh list --type weekly
-fs-restore.sh list --type monthly
+# List snapshot types available for a class
+sudo -u fsbackup /opt/fsbackup/utils/fs-restore.sh list --class class1
 
-# List classes under a specific date key
-fs-restore.sh list --type daily --date 2026-02-27
-
-# List targets under a specific date and class
-fs-restore.sh list --type daily   --date 2026-02-27  --class class2
-fs-restore.sh list --type weekly  --date 2026-W09    --class class1
-fs-restore.sh list --type monthly --date 2026-02     --class class1
+# List targets under a specific class and type
+sudo -u fsbackup /opt/fsbackup/utils/fs-restore.sh list --class class1 --type daily
+sudo -u fsbackup /opt/fsbackup/utils/fs-restore.sh list --class class2 --type weekly
 ```
 
 ### Restore to a local path
 
 ```bash
-# Restore the most recent daily snapshot to /restore/nginx (→ /backup/restore/nginx on host)
-docker exec -it fsbackup /opt/fsbackup/utils/fs-restore.sh restore \
-  --type daily --class class2 --id nginx.data \
+# Restore the most recent daily snapshot
+sudo -u fsbackup /opt/fsbackup/utils/fs-restore.sh restore \
+  --class class2 --id nginx.data \
   --latest \
-  --to /restore/nginx
+  --to /tmp/restore/nginx
 
-# Restore from a specific date
-docker exec -it fsbackup /opt/fsbackup/utils/fs-restore.sh restore \
-  --type weekly --class class2 --id ns1.bind.named.conf \
+# Restore from a specific snapshot
+sudo -u fsbackup /opt/fsbackup/utils/fs-restore.sh restore \
+  --class class2 --id ns1.bind.named.conf \
   --date 2026-W09 \
-  --to /restore/bind
+  --to /tmp/restore/bind
 ```
 
 ### Restore directly to a remote host
 
-The script rsyncs the snapshot to `backup@<host>:<path>` over SSH using the same key the runner uses. The destination path is created if it does not exist.
+The script rsyncs the snapshot to `backup@<host>:<path>` over SSH using the same key the runner uses.
 
 ```bash
-# Restore bind config to ns1 at a staging path
-docker exec -it fsbackup /opt/fsbackup/utils/fs-restore.sh restore \
-  --type daily --class class2 --id ns1.bind.named.conf \
+sudo -u fsbackup /opt/fsbackup/utils/fs-restore.sh restore \
+  --class class2 --id ns1.bind.named.conf \
   --latest \
   --to-host ns1 --to-path /tmp/restore-bind
-
-# Restore from a specific weekly snapshot to ns2
-docker exec -it fsbackup /opt/fsbackup/utils/fs-restore.sh restore \
-  --type weekly --class class2 --id ns2.bind.named.conf \
-  --date 2026-W09 \
-  --to-host ns2 --to-path /tmp/restore-bind
 ```
 
 ### Restore flags reference
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--type` | yes | `daily`, `weekly`, `monthly`, or `annual` |
-| `--class` | yes (restore) | `class1`, `class2`, `class3` |
+| `--class` | yes | `class1`, `class2`, `class3` |
 | `--id` | yes (restore) | Target name as shown in `list` output |
+| `--type` | no | `daily`, `weekly`, or `monthly` (default: daily) |
 | `--latest` | one of | Use the most recent available snapshot |
-| `--date` | one of | Explicit snapshot key (`2026-02-27`, `2026-W09`, `2026-02`, `2026`) |
+| `--date` | one of | Explicit snapshot key (`2026-03-29`, `2026-W13`, `2026-03`) |
 | `--to` | one of | Local destination directory |
 | `--to-host` + `--to-path` | one of | Remote host and path (rsync over SSH) |
-
-### Exit codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 2 | Argument error |
-| 4 | Snapshot not found |
 
 ---
 
@@ -495,34 +486,25 @@ S3 archives are stored as encrypted, compressed tar archives. You need:
 ### Browse what's in S3
 
 ```bash
-# List all tiers
 aws s3 ls s3://fsbackup-snapshots-SUFFIX/ --profile fsbackup
-
-# List all snapshots for a tier
 aws s3 ls s3://fsbackup-snapshots-SUFFIX/weekly/ --recursive --profile fsbackup
-
-# List snapshots for a specific class and target
 aws s3 ls s3://fsbackup-snapshots-SUFFIX/weekly/class1/paperlessngx.db/ --profile fsbackup
 ```
 
 ### Download and decrypt an archive
 
 ```bash
-# Download the archive
 aws s3 cp \
   s3://fsbackup-snapshots-SUFFIX/weekly/class1/paperlessngx.db/paperlessngx.db--2026-W09.tar.zst.age \
   /tmp/restore/ \
   --profile fsbackup
 
-# Decrypt, decompress, and extract to a local directory
 age -d -i /path/to/age.key /tmp/restore/paperlessngx.db--2026-W09.tar.zst.age \
   | zstd -d \
   | tar -xf - -C /tmp/restore/paperlessngx.db/
 ```
 
 ### Stream directly without downloading first
-
-If the archive is large and you don't want to save the encrypted file locally:
 
 ```bash
 aws s3 cp \
@@ -547,14 +529,12 @@ Examples:
 ```
 weekly/class1/paperlessngx.db/paperlessngx.db--2026-W09.tar.zst.age
 monthly/class2/nginx.config/nginx.config--2026-03.tar.zst.age
-annual/class1/homeassistant.db/homeassistant.db--2025.tar.zst.age
 ```
 
 ---
 
 ## Further reading
 
-- [Docker deployment](docs/docker.md)
 - [Installation](docs/installation.md)
 - [Adding hosts and targets](docs/adding-hosts-and-targets.md)
 - [Operations guide](docs/operations.md)
